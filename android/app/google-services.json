@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "42007266248",
+    "project_id": "studio-6089945771-2a73d",
+    "storage_bucket": "studio-6089945771-2a73d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:42007266248:android:d748aad89172a9efd736fd",
+        "android_client_info": {
+          "package_name": "com.wintech.spark"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "42007266248-r65ukbu9shcjac93rkg0rv766rgc2gev.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDP1Lq1mDQfVyrGT_gYOkd5JJ04MxwdLZQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "42007266248-r65ukbu9shcjac93rkg0rv766rgc2gev.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
