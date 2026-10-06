@@ -1,11 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme.dart';
-import '../../core/models/models.dart';
-import '../../services/hive_service.dart';
 import '../../services/sync_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/alert_service.dart';
 import '../alerts/alerts_screen.dart';
 import 'dashboard_screen.dart';
 import '../billing/billing_screen.dart';
@@ -37,6 +36,7 @@ class _MainLayoutState extends State<MainLayout>
     }
     // Initialize continuous bidirectional sync with Web App Firestore
     SyncService.initLiveSync();
+    AlertService.recalculateCount();
     _titleAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -64,9 +64,18 @@ class _MainLayoutState extends State<MainLayout>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       extendBody: true,
       appBar: AppBar(
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness:
+              isDark ? Brightness.light : Brightness.dark,
+        ),
         leadingWidth: 54,
         leading: Padding(
           padding: const EdgeInsets.only(left: 14, top: 10, bottom: 10),
@@ -126,22 +135,23 @@ class _MainLayoutState extends State<MainLayout>
           ),
         ),
         actions: [
-          ValueListenableBuilder<Box<Product>>(
-            valueListenable:
-                Hive.box<Product>(HiveService.productBoxName).listenable(),
-            builder: (context, box, _) {
-              final lowStockCount =
-                  box.values.where((p) => p.stockQuantity <= 10).length;
+          ValueListenableBuilder<int>(
+            valueListenable: AlertService.activeAlertsCountNotifier,
+            builder: (context, alertCount, _) {
               final isDark = Theme.of(context).brightness == Brightness.dark;
 
               return IconButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AlertsScreen()),
-                ),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const AlertsScreen()),
+                  );
+                  AlertService.recalculateCount();
+                },
                 icon: Badge(
-                  isLabelVisible: lowStockCount > 0,
-                  label: Text('$lowStockCount'),
+                  isLabelVisible: alertCount > 0,
+                  label: Text(alertCount > 99 ? '99+' : '$alertCount'),
                   backgroundColor: Colors.redAccent,
                   child: Icon(
                     Icons.notifications_none_rounded,

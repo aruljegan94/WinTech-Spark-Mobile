@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/theme.dart';
 import '../../core/models/models.dart';
 import '../../services/invoice_service.dart';
 import '../../services/hive_service.dart';
 import 'invoice_detail_screen.dart';
 import 'widgets/thermal_print_dialog.dart';
+import '../../widgets/compact_barcode_scanner_dialog.dart';
 
 class CreateInvoiceScreen extends StatefulWidget {
   final Map<String, dynamic>? editData;
@@ -279,15 +278,30 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor:
+          isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: isDark ? Colors.white : AppColors.lightText100,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               widget.editData != null ? 'Edit Invoice' : 'New Tax Invoice',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: isDark ? Colors.white : AppColors.lightText100,
+              ),
             ),
             Row(
               children: [
@@ -295,10 +309,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 const SizedBox(width: 4),
                 Text(
                   _invoiceNumberPreview,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 11,
-                    color: Colors.grey,
+                    color: isDark ? Colors.white70 : Colors.grey.shade600,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -308,9 +322,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () => _showScanner(context),
-            icon: const Icon(Icons.qr_code_scanner_rounded),
-            tooltip: 'Scan Barcodes Continuously',
+            onPressed: () => _openContinuousScanner(context),
+            icon: Icon(
+              Icons.qr_code_scanner_rounded,
+              color: isDark ? Colors.white : AppColors.primary,
+            ),
+            tooltip: 'Continuous Barcode Scanner',
           ),
           TextButton.icon(
             onPressed: _isSaving ? null : () => _saveInvoice(openWhatsApp: false),
@@ -322,6 +339,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   )
                 : const Icon(Icons.check_rounded, size: 18),
             label: const Text('Save'),
+            style: TextButton.styleFrom(
+              foregroundColor:
+                  isDark ? AppColors.primaryLight : AppColors.primary,
+            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -374,6 +395,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Customer Card & Pickers ────────────────────────────────────────────────
   Widget _buildCustomerSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return _SectionContainer(
       title: 'CUSTOMER INFORMATION',
       action: TextButton.icon(
@@ -381,7 +403,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         icon: const Icon(Icons.people_alt_rounded, size: 16),
         label: const Text('Pick Customer', style: TextStyle(fontSize: 12)),
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor:
+              isDark ? AppColors.primaryLight : AppColors.primary,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         ),
       ),
@@ -389,6 +412,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         children: [
           TextFormField(
             controller: _customerCtrl,
+            style: _fieldStyle(isDark),
             decoration: _inputDeco(
               label: 'Customer Name',
               icon: Icons.person_rounded,
@@ -401,6 +425,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               Expanded(
                 child: TextFormField(
                   controller: _customerMobileCtrl,
+                  style: _fieldStyle(isDark),
                   keyboardType: TextInputType.phone,
                   decoration: _inputDeco(
                     label: 'Mobile Number',
@@ -413,6 +438,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               Expanded(
                 child: TextFormField(
                   controller: _customerAddressCtrl,
+                  style: _fieldStyle(isDark),
                   decoration: _inputDeco(
                     label: 'City / Address',
                     icon: Icons.location_on_rounded,
@@ -458,6 +484,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Add Item Section ───────────────────────────────────────────────────────
   Widget _buildAddItemSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return _SectionContainer(
       title: 'ADD PRODUCTS',
       action: Row(
@@ -465,14 +492,16 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         children: [
           IconButton(
             onPressed: _showProductCatalogSheet,
-            icon: const Icon(Icons.inventory_2_rounded,
-                color: AppColors.primary, size: 20),
+            icon: Icon(Icons.inventory_2_rounded,
+                color: isDark ? AppColors.primaryLight : AppColors.primary,
+                size: 20),
             tooltip: 'Browse Inventory',
           ),
           IconButton(
-            onPressed: () => _showScanner(context),
-            icon: const Icon(Icons.qr_code_scanner_rounded,
-                color: AppColors.primary, size: 20),
+            onPressed: () => _scanSingleItemBarcode(context),
+            icon: Icon(Icons.qr_code_scanner_rounded,
+                color: isDark ? AppColors.primaryLight : AppColors.primary,
+                size: 20),
             tooltip: 'Scan Barcode',
           ),
         ],
@@ -481,6 +510,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         children: [
           TextFormField(
             controller: _itemNameCtrl,
+            style: _fieldStyle(isDark),
             decoration: _inputDeco(
               label: 'Item Description / Name',
               icon: Icons.label_outline_rounded,
@@ -494,6 +524,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 flex: 3,
                 child: TextFormField(
                   controller: _itemPriceCtrl,
+                  style: _fieldStyle(isDark),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: _inputDeco(
@@ -507,6 +538,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 flex: 2,
                 child: TextFormField(
                   controller: _itemQtyCtrl,
+                  style: _fieldStyle(isDark),
                   keyboardType: TextInputType.number,
                   decoration: _inputDeco(
                     label: 'Qty',
@@ -519,6 +551,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 flex: 2,
                 child: TextFormField(
                   controller: _itemGstCtrl,
+                  style: _fieldStyle(isDark),
                   keyboardType: TextInputType.number,
                   decoration: _inputDeco(
                     label: 'GST%',
@@ -537,8 +570,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               label: const Text('Add to Bill'),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: AppColors.primary, width: 1.5),
-                foregroundColor: AppColors.primary,
+                side: BorderSide(
+                    color: isDark ? AppColors.primaryLight : AppColors.primary,
+                    width: 1.5),
+                foregroundColor:
+                    isDark ? AppColors.primaryLight : AppColors.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -552,14 +588,18 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Cart Items List Card ───────────────────────────────────────────────────
   Widget _buildCartItemCard(int idx, SaleItem item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppColors.darkSurfaceElevated : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.18)),
+        border: Border.all(
+          color: isDark
+              ? AppColors.darkBorder
+              : AppColors.outlineVariant.withValues(alpha: 0.18),
+        ),
       ),
       child: Row(
         children: [
@@ -569,13 +609,20 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               children: [
                 Text(
                   item.productName,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color:
+                        isDark ? AppColors.darkText100 : AppColors.lightText100,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '₹${_fmt.format(item.price)} × ${item.quantity}  (+${item.gstPercentage.toStringAsFixed(0)}% GST)',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                  style: TextStyle(
+                    color: isDark ? AppColors.darkText70 : Colors.grey.shade600,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -584,8 +631,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             children: [
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.remove_circle_outline_rounded,
-                    size: 20, color: Colors.grey),
+                icon: Icon(Icons.remove_circle_outline_rounded,
+                    size: 20, color: isDark ? Colors.white70 : Colors.grey),
                 onPressed: () {
                   if (item.quantity > 1) {
                     setState(() {
@@ -608,13 +655,18 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               ),
               Text(
                 '${item.quantity}',
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color:
+                      isDark ? AppColors.darkText100 : AppColors.lightText100,
+                ),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.add_circle_outline_rounded,
-                    size: 20, color: AppColors.primary),
+                icon: Icon(Icons.add_circle_outline_rounded,
+                    size: 20,
+                    color: isDark ? AppColors.primaryLight : AppColors.primary),
                 onPressed: () {
                   setState(() {
                     final updated = SaleItem(
@@ -634,10 +686,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               const SizedBox(width: 8),
               Text(
                 '₹${_fmt.format(item.total)}',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.primary,
-                    fontSize: 14),
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? AppColors.primaryLight : AppColors.primary,
+                  fontSize: 14,
+                ),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
@@ -654,6 +707,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Payment Section ────────────────────────────────────────────────────────
   Widget _buildPaymentSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return _SectionContainer(
       title: 'PAYMENT DETAILS',
       child: Column(
@@ -676,18 +730,34 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? AppColors.primary.withValues(alpha: 0.12)
-                          : AppColors.surfaceContainerLow,
+                          ? AppColors.primary
+                              .withValues(alpha: isDark ? 0.35 : 0.12)
+                          : (isDark
+                              ? AppColors.darkSurfaceElevated
+                              : AppColors.surfaceContainerLow),
                       borderRadius: BorderRadius.circular(12),
-                      border: isSelected
-                          ? Border.all(color: AppColors.primary, width: 1.5)
-                          : null,
+                      border: Border.all(
+                        color: isSelected
+                            ? (isDark
+                                ? AppColors.primaryLight
+                                : AppColors.primary)
+                            : (isDark
+                                ? AppColors.darkBorder
+                                : Colors.transparent),
+                        width: 1.5,
+                      ),
                     ),
                     child: Column(
                       children: [
                         Icon(icon,
                             size: 18,
-                            color: isSelected ? AppColors.primary : Colors.grey),
+                            color: isSelected
+                                ? (isDark
+                                    ? AppColors.primaryLight
+                                    : AppColors.primary)
+                                : (isDark
+                                    ? AppColors.darkText50
+                                    : Colors.grey.shade600)),
                         const SizedBox(height: 4),
                         Text(
                           mode,
@@ -695,8 +765,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: isSelected
-                                ? AppColors.primary
-                                : Colors.grey.shade700,
+                                ? (isDark
+                                    ? AppColors.primaryLight
+                                    : AppColors.primary)
+                                : (isDark
+                                    ? AppColors.darkText70
+                                    : Colors.grey.shade700),
                           ),
                         ),
                       ],
@@ -730,12 +804,19 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? col.withValues(alpha: 0.15)
-                          : AppColors.surfaceContainerLow,
+                          ? col.withValues(alpha: isDark ? 0.30 : 0.15)
+                          : (isDark
+                              ? AppColors.darkSurfaceElevated
+                              : AppColors.surfaceContainerLow),
                       borderRadius: BorderRadius.circular(12),
-                      border: isSelected
-                          ? Border.all(color: col, width: 1.5)
-                          : null,
+                      border: Border.all(
+                        color: isSelected
+                            ? col
+                            : (isDark
+                                ? AppColors.darkBorder
+                                : Colors.transparent),
+                        width: 1.5,
+                      ),
                     ),
                     child: Text(
                       status,
@@ -743,7 +824,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: isSelected ? col : Colors.grey.shade700,
+                        color: isSelected
+                            ? col
+                            : (isDark
+                                ? AppColors.darkText70
+                                : Colors.grey.shade700),
                       ),
                     ),
                   ),
@@ -757,6 +842,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             const SizedBox(height: 16),
             TextFormField(
               initialValue: _paidAmount > 0 ? _paidAmount.toString() : '',
+              style: _fieldStyle(isDark),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: _inputDeco(
@@ -787,10 +873,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Notes Section ──────────────────────────────────────────────────────────
   Widget _buildNotesSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return _SectionContainer(
       title: 'REMARKS & NOTES',
       child: TextFormField(
         controller: _notesCtrl,
+        style: _fieldStyle(isDark),
         maxLines: 2,
         decoration: _inputDeco(
           label: 'Notes / Vehicle Reg # / Terms',
@@ -803,14 +891,20 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Bottom Sticky Checkout Bar ─────────────────────────────────────────────
   Widget _buildBottomCheckoutBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppColors.darkSurface : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(
+          top: BorderSide(
+            color: isDark ? AppColors.darkBorder : Colors.grey.shade200,
+          ),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.08),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),
@@ -827,18 +921,21 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('GRAND TOTAL',
+                    Text('GRAND TOTAL',
                         style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: Colors.grey,
+                            color: isDark
+                                ? AppColors.darkText50
+                                : Colors.grey.shade600,
                             letterSpacing: 1.2)),
                     Text(
                       '₹${_fmt.format(_total)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
-                        color: AppColors.primary,
+                        color:
+                            isDark ? AppColors.primaryLight : AppColors.primary,
                         letterSpacing: -0.5,
                       ),
                     ),
@@ -846,7 +943,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 ),
                 Text(
                   'Tax: ₹${_fmt.format(_gstAmount)}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppColors.darkText70 : Colors.grey.shade600,
+                  ),
                 ),
               ],
             ),
@@ -879,17 +979,22 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                         : () => _saveInvoice(openWhatsApp: false),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: AppColors.primary, width: 1.2),
+                      side: BorderSide(
+                        color:
+                            isDark ? AppColors.primaryLight : AppColors.primary,
+                        width: 1.2,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Save',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: AppColors.primary,
+                        color:
+                            isDark ? AppColors.primaryLight : AppColors.primary,
                       ),
                     ),
                   ),
@@ -942,6 +1047,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Customer Database Picker Sheet ─────────────────────────────────────────
   void _showCustomerPickerSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -952,9 +1058,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           builder: (ctx, setSheetState) => Container(
             height: MediaQuery.of(context).size.height * 0.75,
             padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : Colors.white,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -962,26 +1069,56 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Select Customer',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Select Customer',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? AppColors.darkText100 : Colors.black87,
+                      ),
+                    ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: isDark ? AppColors.darkText70 : Colors.black54,
+                      ),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 TextField(
+                  style: TextStyle(
+                    color: isDark ? AppColors.darkText100 : Colors.black87,
+                  ),
                   onChanged: (v) => setSheetState(() => query = v.toLowerCase()),
                   decoration: InputDecoration(
                     hintText: 'Search customer by name or phone…',
-                    prefixIcon: const Icon(Icons.search_rounded),
+                    hintStyle: TextStyle(
+                      color:
+                          isDark ? AppColors.darkText50 : Colors.grey.shade400,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: isDark ? AppColors.darkText70 : Colors.grey,
+                    ),
                     filled: true,
-                    fillColor: AppColors.surfaceContainerLow,
+                    fillColor: isDark
+                        ? AppColors.darkSurfaceElevated
+                        : AppColors.surfaceContainerLow,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
+                      borderSide: BorderSide(
+                        color:
+                            isDark ? AppColors.darkBorder : Colors.transparent,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color:
+                            isDark ? AppColors.darkBorder : Colors.transparent,
+                      ),
                     ),
                   ),
                 ),
@@ -1002,15 +1139,23 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       }
 
                       if (customers.isEmpty) {
-                        return const Center(
-                          child: Text('No matching customers found.',
-                              style: TextStyle(color: Colors.grey)),
+                        return Center(
+                          child: Text(
+                            'No matching customers found.',
+                            style: TextStyle(
+                              color:
+                                  isDark ? AppColors.darkText50 : Colors.grey,
+                            ),
+                          ),
                         );
                       }
 
                       return ListView.separated(
                         itemCount: customers.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: isDark ? AppColors.darkBorder : null,
+                        ),
                         itemBuilder: (context, i) {
                           final c = customers[i];
                           return ListTile(
@@ -1018,18 +1163,36 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               backgroundColor:
                                   AppColors.primary.withValues(alpha: 0.1),
                               child: Text(
-                                c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
+                                c.name.isNotEmpty
+                                    ? c.name[0].toUpperCase()
+                                    : 'C',
                                 style: const TextStyle(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.bold),
                               ),
                             ),
-                            title: Text(c.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold)),
+                            title: Text(
+                              c.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? AppColors.darkText100
+                                    : Colors.black87,
+                              ),
+                            ),
                             subtitle: Text(
-                                '${c.mobile}${c.pendingDue > 0 ? " • Due: ₹${c.pendingDue.toStringAsFixed(0)}" : ""}'),
-                            trailing: const Icon(Icons.chevron_right_rounded),
+                              '${c.mobile}${c.pendingDue > 0 ? " • Due: ₹${c.pendingDue.toStringAsFixed(0)}" : ""}',
+                              style: TextStyle(
+                                color: isDark
+                                    ? AppColors.darkText70
+                                    : Colors.black54,
+                              ),
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right_rounded,
+                              color:
+                                  isDark ? AppColors.darkText50 : Colors.grey,
+                            ),
                             onTap: () {
                               setState(() {
                                 _selectedCustomerId = c.id;
@@ -1055,6 +1218,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   // ── Browse Product Catalog Sheet ───────────────────────────────────────────
   void _showProductCatalogSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1077,9 +1241,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             return Container(
               height: MediaQuery.of(context).size.height * 0.75,
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1087,39 +1252,82 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Select Product from Inventory',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Select Product from Inventory',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDark ? AppColors.darkText100 : Colors.black87,
+                        ),
+                      ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded),
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: isDark ? AppColors.darkText70 : Colors.black54,
+                        ),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
                   TextField(
-                    onChanged: (v) => setSheetState(() => query = v.toLowerCase()),
+                    style: TextStyle(
+                      color: isDark ? AppColors.darkText100 : Colors.black87,
+                    ),
+                    onChanged: (v) =>
+                        setSheetState(() => query = v.toLowerCase()),
                     decoration: InputDecoration(
                       hintText: 'Search product name, category, or barcode…',
-                      prefixIcon: const Icon(Icons.search_rounded),
+                      hintStyle: TextStyle(
+                        color: isDark
+                            ? AppColors.darkText50
+                            : Colors.grey.shade400,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        color: isDark ? AppColors.darkText70 : Colors.grey,
+                      ),
                       filled: true,
-                      fillColor: AppColors.surfaceContainerLow,
+                      fillColor: isDark
+                          ? AppColors.darkSurfaceElevated
+                          : AppColors.surfaceContainerLow,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : Colors.transparent,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? AppColors.darkBorder
+                              : Colors.transparent,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
                   Expanded(
                     child: filtered.isEmpty
-                        ? const Center(
-                            child: Text('No products found',
-                                style: TextStyle(color: Colors.grey)))
+                        ? Center(
+                            child: Text(
+                              'No products found',
+                              style: TextStyle(
+                                color:
+                                    isDark ? AppColors.darkText50 : Colors.grey,
+                              ),
+                            ),
+                          )
                         : ListView.separated(
                             itemCount: filtered.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
+                            separatorBuilder: (_, __) => Divider(
+                              height: 1,
+                              color: isDark ? AppColors.darkBorder : null,
+                            ),
                             itemBuilder: (context, i) {
                               final p = filtered[i];
                               final isLow = p.stockQuantity <= 5;
@@ -1128,25 +1336,41 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
                                     color: isLow
-                                        ? Colors.orange.withValues(alpha: 0.1)
-                                        : Colors.green.withValues(alpha: 0.1),
+                                        ? Colors.orange.withValues(alpha: 0.15)
+                                        : Colors.green.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: Icon(Icons.inventory_2_rounded,
-                                      color: isLow ? Colors.orange : Colors.green,
-                                      size: 20),
+                                  child: Icon(
+                                    Icons.inventory_2_rounded,
+                                    color:
+                                        isLow ? Colors.orange : Colors.green,
+                                    size: 20,
+                                  ),
                                 ),
-                                title: Text(p.productName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold)),
+                                title: Text(
+                                  p.productName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark
+                                        ? AppColors.darkText100
+                                        : Colors.black87,
+                                  ),
+                                ),
                                 subtitle: Text(
-                                    '${p.category} • In Stock: ${p.stockQuantity}'),
+                                  '${p.category} • In Stock: ${p.stockQuantity}',
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? AppColors.darkText70
+                                        : Colors.black54,
+                                  ),
+                                ),
                                 trailing: Text(
                                   '₹${_fmt.format(p.sellingPrice)}',
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 15,
-                                      color: AppColors.primary),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
                                 onTap: () {
                                   setState(() {
@@ -1172,320 +1396,75 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     );
   }
 
-  // ── Barcode Scanner Sheet (Continuous Auto-Cart) ───────────────────────────
-  void _showScanner(BuildContext context) {
-    DateTime? lastScanTime;
-    String? lastScannedBarcode;
-    String? feedbackMessage;
-    bool feedbackSuccess = true;
-    final scannerController = MobileScannerController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) {
-        final isDark = Theme.of(sheetCtx).brightness == Brightness.dark;
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Container(
-              height: MediaQuery.of(sheetCtx).size.height * 0.80,
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : Colors.white,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
-                border: Border.all(
-                  color: isDark ? AppColors.darkBorder : Colors.grey.shade200,
-                ),
-              ),
-              child: Column(
-                children: [
-                  // Handle & Header
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    child: Column(
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 36,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.qr_code_scanner_rounded,
-                                  color: AppColors.primary, size: 22),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Continuous Barcode Scanner',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark
-                                          ? Colors.white
-                                          : AppColors.onSurface,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Point camera at barcode to auto-add to cart',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: isDark
-                                          ? Colors.white54
-                                          : AppColors.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => scannerController.toggleTorch(),
-                              icon: const Icon(Icons.flash_on_rounded),
-                              tooltip: 'Toggle Flashlight',
-                            ),
-                            IconButton(
-                              onPressed: () {
-                                scannerController.dispose();
-                                Navigator.pop(sheetCtx);
-                              },
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Scanner Viewport
-                  Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: Colors.black,
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          MobileScanner(
-                            controller: scannerController,
-                            onDetect: (capture) {
-                              final List<Barcode> barcodes = capture.barcodes;
-                              if (barcodes.isEmpty) return;
-                              final code = barcodes.first.rawValue?.trim();
-                              if (code == null || code.isEmpty) return;
-
-                              final now = DateTime.now();
-                              if (lastScannedBarcode == code &&
-                                  lastScanTime != null &&
-                                  now
-                                          .difference(lastScanTime!)
-                                          .inMilliseconds <
-                                      1400) {
-                                return; // Debounce same barcode within 1.4s
-                              }
-
-                              lastScanTime = now;
-                              lastScannedBarcode = code;
-
-                              final product =
-                                  HiveService.getProductByBarcode(code);
-                              if (product != null) {
-                                HapticFeedback.mediumImpact();
-                                _addOrIncrementProductToCart(product);
-                                final inCart = _cartItems.firstWhere(
-                                    (i) => i.productId == product.id);
-
-                                setSheetState(() {
-                                  feedbackSuccess = true;
-                                  feedbackMessage =
-                                      'Added "${product.productName}" (Qty: ${inCart.quantity}) • ₹${product.sellingPrice.toStringAsFixed(0)}';
-                                });
-                              } else {
-                                HapticFeedback.vibrate();
-                                setSheetState(() {
-                                  feedbackSuccess = false;
-                                  feedbackMessage =
-                                      'Barcode "$code" not found in inventory';
-                                });
-                              }
-                            },
-                          ),
-
-                          // Target Viewfinder Overlay
-                          Container(
-                            width: 250,
-                            height: 160,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: AppColors.primary,
-                                width: 2.5,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Feedback / Status Banner
-                  if (feedbackMessage != null)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: feedbackSuccess
-                            ? (isDark
-                                ? const Color(0xFF0F3820)
-                                : const Color(0xFFE8F5E9))
-                            : (isDark
-                                ? const Color(0xFF3B1E08)
-                                : const Color(0xFFFFF3E0)),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: feedbackSuccess ? Colors.green : Colors.orange,
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            feedbackSuccess
-                                ? Icons.check_circle_rounded
-                                : Icons.info_outline_rounded,
-                            color:
-                                feedbackSuccess ? Colors.green : Colors.orange,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              feedbackMessage!,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: feedbackSuccess
-                                    ? (isDark
-                                        ? Colors.greenAccent
-                                        : Colors.green.shade800)
-                                    : (isDark
-                                        ? Colors.orangeAccent
-                                        : Colors.orange.shade900),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Bottom Cart Preview & Done Action
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkSurfaceElevated
-                          : Colors.grey.shade50,
-                      border: Border(
-                        top: BorderSide(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : Colors.grey.shade200,
-                        ),
-                      ),
-                    ),
-                    child: SafeArea(
-                      top: false,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '${_cartItems.length} Products in Cart',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: isDark
-                                        ? Colors.white
-                                        : AppColors.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '₹${_fmt.format(_total)} Total (incl. GST)',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              scannerController.dispose();
-                              Navigator.pop(sheetCtx);
-                            },
-                            icon: const Icon(Icons.done_all_rounded, size: 18),
-                            label: const Text('Done Scanning'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+  // ── Continuous POS Barcode Scanner Flow ──────────────────────────────────
+  Future<void> _openContinuousScanner(BuildContext context) async {
+    await CompactBarcodeScannerDialog.show(
+      context,
+      continuousMode: true,
+      currentCartItems: _cartItems,
+      onProductScanned: (product) {
+        _addOrIncrementProductToCart(product);
       },
+    );
+    if (mounted) setState(() {});
+  }
+
+  // ── Single Item Barcode Scan & Fill Flow ─────────────────────────────────
+  Future<void> _scanSingleItemBarcode(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final barcode = await CompactBarcodeScannerDialog.show(
+      context,
+      continuousMode: false,
+    );
+
+    if (barcode == null || !mounted) return;
+
+    final product = HiveService.getProductByBarcode(barcode);
+    if (product != null) {
+      setState(() {
+        _itemNameCtrl.text = product.productName;
+        _itemPriceCtrl.text = product.sellingPrice.toString();
+        _itemGstCtrl.text = product.gstPercentage.toString();
+        _itemQtyCtrl.text = '1';
+      });
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Selected "${product.productName}" from barcode'),
+          backgroundColor: AppColors.primary,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      setState(() {
+        _itemNameCtrl.text = barcode;
+      });
+      messenger.showSnackBar(
+        SnackBar(
+          content:
+              Text('Scanned barcode "$barcode". Enter item details to add.'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  TextStyle _fieldStyle(bool isDark) {
+    return TextStyle(
+      color: isDark ? AppColors.darkText100 : Colors.black87,
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
     );
   }
 
   Widget _sectionHeader(String title) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w900,
         letterSpacing: 1.2,
-        color: Colors.grey,
+        color: isDark ? AppColors.darkText70 : Colors.grey.shade600,
       ),
     );
   }
@@ -1495,22 +1474,43 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     required IconData icon,
     String? hint,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       labelText: label,
+      labelStyle: TextStyle(
+        color: isDark ? AppColors.darkText70 : Colors.grey.shade700,
+      ),
       hintText: hint,
+      hintStyle: TextStyle(
+        color: isDark ? AppColors.darkText50 : Colors.grey.shade400,
+        fontSize: 13,
+      ),
       prefixIcon: Icon(icon, size: 20, color: AppColors.primary),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: isDark ? AppColors.darkSurfaceElevated : Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide:
-            BorderSide(color: AppColors.outlineVariant.withValues(alpha: 0.25)),
+        borderSide: BorderSide(
+          color: isDark
+              ? AppColors.darkBorder
+              : AppColors.outlineVariant.withValues(alpha: 0.25),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide:
-            BorderSide(color: AppColors.outlineVariant.withValues(alpha: 0.25)),
+        borderSide: BorderSide(
+          color: isDark
+              ? AppColors.darkBorder
+              : AppColors.outlineVariant.withValues(alpha: 0.25),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: AppColors.primary,
+          width: 1.5,
+        ),
       ),
     );
   }
@@ -1529,6 +1529,7 @@ class _SectionContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1537,11 +1538,11 @@ class _SectionContainer extends StatelessWidget {
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 1.2,
-                color: Colors.grey,
+                color: isDark ? AppColors.darkText70 : Colors.grey.shade600,
               ),
             ),
             if (action != null) action!,
@@ -1552,13 +1553,16 @@ class _SectionContainer extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? AppColors.darkSurface : Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-                color: AppColors.outlineVariant.withValues(alpha: 0.15)),
+              color: isDark
+                  ? AppColors.darkBorder
+                  : AppColors.outlineVariant.withValues(alpha: 0.15),
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.025),
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.025),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),

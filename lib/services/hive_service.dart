@@ -22,6 +22,7 @@ class HiveService {
     await Hive.openBox<Sale>(saleBoxName);
     await Hive.openBox<Expense>(expenseBoxName);
     await Hive.openBox<ShopSettings>(settingsBoxName);
+    await Hive.openBox('printer_settings');
   }
 
   // ── Shop Settings ─────────────────────────────────────────────
@@ -41,6 +42,33 @@ class HiveService {
 
   static Future<void> saveShopSettings(ShopSettings settings) async {
     await _settingsBox.put('main', settings);
+  }
+
+  // ── Printer Settings ──────────────────────────────────────────
+  static Box get _printerBox => Hive.box('printer_settings');
+
+  static String? getSelectedPrinterUrl() {
+    return _printerBox.get('selected_printer_url') as String?;
+  }
+
+  static String? getSelectedPrinterName() {
+    return _printerBox.get('selected_printer_name') as String?;
+  }
+
+  static Future<void> setSelectedPrinter({
+    required String? url,
+    required String? name,
+  }) async {
+    await _printerBox.put('selected_printer_url', url);
+    await _printerBox.put('selected_printer_name', name);
+  }
+
+  static String getPreferredPaperSize() {
+    return _printerBox.get('preferred_paper_size', defaultValue: '80mm') as String;
+  }
+
+  static Future<void> setPreferredPaperSize(String size) async {
+    await _printerBox.put('preferred_paper_size', size);
   }
 
 

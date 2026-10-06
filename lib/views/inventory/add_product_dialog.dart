@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../core/models/models.dart';
 import '../../services/sync_service.dart';
-import 'scanner_screen.dart';
+import '../../widgets/compact_barcode_scanner_dialog.dart';
 
 class AddProductDialog extends StatefulWidget {
   final String? initialBarcode;
@@ -74,11 +74,8 @@ class _AddProductDialogState extends State<AddProductDialog> {
   }
 
   Future<void> _scanBarcode() async {
-    final code = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const ScannerScreen()),
-    );
-    if (code != null && mounted) {
+    final code = await CompactBarcodeScannerDialog.show(context);
+    if (code != null && code.isNotEmpty && mounted) {
       setState(() => _skuController.text = code);
     }
   }

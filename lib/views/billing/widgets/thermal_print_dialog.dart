@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:pos_universal_printer/pos_universal_printer.dart';
+import 'package:pos_universal_printer/pos_universal_printer.dart' hide Size;
+import 'package:printing/printing.dart';
 import '../../../core/theme.dart';
 import '../../../services/hive_service.dart';
 import '../../../services/invoice_service.dart';
@@ -32,7 +33,7 @@ class ThermalPrintDialog extends StatefulWidget {
 }
 
 class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
-  String _paperWidth = '80mm'; // '58mm' (2 Inch) or '80mm' (3 Inch)
+  late String _paperWidth; // '58mm' (2 Inch) or '80mm' (3 Inch)
   Map<String, dynamic>? _companyProfile;
   bool _isPrinting = false;
 
@@ -43,6 +44,7 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
   @override
   void initState() {
     super.initState();
+    _paperWidth = HiveService.getPreferredPaperSize();
     _loadProfile();
   }
 
@@ -55,6 +57,11 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
         });
       }
     } catch (_) {}
+  }
+
+  void _setPaperWidth(String width) {
+    setState(() => _paperWidth = width);
+    HiveService.setPreferredPaperSize(width);
   }
 
   @override
@@ -86,7 +93,7 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
     final customerName = widget.invoice['customerName'] ?? '';
     final customerMobile = widget.invoice['customerMobile'] ?? '';
 
-    final device = _printerService.connectedDevice;
+    final isPrinterReady = _printerService.isPrinterReady;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.88,
@@ -157,7 +164,7 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                   child: _PaperSizeButton(
                     label: '58mm (2 Inch)',
                     selected: _paperWidth == '58mm',
-                    onTap: () => setState(() => _paperWidth = '58mm'),
+                    onTap: () => _setPaperWidth('58mm'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -165,23 +172,23 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                   child: _PaperSizeButton(
                     label: '80mm (3 Inch)',
                     selected: _paperWidth == '80mm',
-                    onTap: () => setState(() => _paperWidth = '80mm'),
+                    onTap: () => _setPaperWidth('80mm'),
                   ),
                 ),
               ],
             ),
           ),
 
-          // ── Bluetooth Connection Status Banner ───────────────────────
+          // ── Thermal Printer Connection Status Banner ─────────────────
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             decoration: BoxDecoration(
-              color: device != null
+              color: isPrinterReady
                   ? Colors.green.shade50
                   : Colors.amber.shade50,
               border: Border(
                 bottom: BorderSide(
-                  color: device != null
+                  color: isPrinterReady
                       ? Colors.green.shade200
                       : Colors.amber.shade200,
                 ),
@@ -190,22 +197,30 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
             child: Row(
               children: [
                 Icon(
-                  Icons.bluetooth_rounded,
+                  _printerService.hasSystemPrinter
+                      ? Icons.print_rounded
+                      : (_printerService.isConnected
+                          ? Icons.bluetooth_connected_rounded
+                          : Icons.print_outlined),
                   size: 18,
-                  color: device != null
+                  color: isPrinterReady
                       ? Colors.green.shade700
                       : Colors.amber.shade800,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    device != null
-                        ? 'Bluetooth: ${device.name.isNotEmpty ? device.name : 'Connected'}'
-                        : 'Bluetooth: Not connected',
+                    _printerService.hasSystemPrinter
+                        ? 'Printer: ${_printerService.selectedSystemPrinter!.name}'
+                        : (_printerService.isConnected
+                            ? 'Bluetooth: ${_printerService.connectedDevice!.name}'
+                            : (_printerService.isDesktopPlatform
+                                ? 'Thermal Printer: Not selected'
+                                : 'No Printer Connected')),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: device != null
+                      color: isPrinterReady
                           ? Colors.green.shade800
                           : Colors.amber.shade900,
                     ),
@@ -213,17 +228,17 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                   ),
                 ),
                 InkWell(
-                  onTap: _showBluetoothScanner,
+                  onTap: _openPrinterPicker,
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Text(
-                      device != null ? 'Change' : 'Scan & Connect',
+                      isPrinterReady ? 'Change' : 'Select Printer',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: device != null
+                        color: isPrinterReady
                             ? Colors.green.shade800
                             : AppColors.primary,
                       ),
@@ -315,26 +330,26 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                           _previewDashedDivider(is3Inch),
 
                           // Items Table Header
-                          Row(
+                          const Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                   flex: 5,
                                   child: Text('Item',
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold))),
-                              const Expanded(
+                              Expanded(
                                   flex: 2,
                                   child: Text('Qty',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold))),
-                              const Expanded(
+                              Expanded(
                                   flex: 2,
                                   child: Text('Rate',
                                       textAlign: TextAlign.right,
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold))),
-                              const Expanded(
+                              Expanded(
                                   flex: 3,
                                   child: Text('Amt',
                                       textAlign: TextAlign.right,
@@ -396,8 +411,8 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                           _previewDashedDivider(is3Inch),
 
                           // Totals
-                          _previewRow('Subtotal:', '₹${_fmt.format(subtotal)}'),
-                          _previewRow('GST:', '₹${_fmt.format(gstAmount)}'),
+                          _previewRow('Subtotal:', 'Rs. ${_fmt.format(subtotal)}'),
+                          _previewRow('GST:', 'Rs. ${_fmt.format(gstAmount)}'),
                           Container(
                             decoration: const BoxDecoration(
                               border: Border(
@@ -414,7 +429,7 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12)),
-                                Text('₹${_fmt.format(total)}',
+                                Text('Rs. ${_fmt.format(total)}',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12)),
@@ -424,8 +439,8 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                           _previewRow('Payment Mode:', paymentMode),
                           _previewRow('Payment Status:', status.toUpperCase()),
                           if (paidAmount > 0 && balance > 0.01) ...[
-                            _previewRow('Amount Paid:', '₹${_fmt.format(paidAmount)}'),
-                            _previewRow('Balance Due:', '₹${_fmt.format(balance)}', bold: true),
+                            _previewRow('Amount Paid:', 'Rs. ${_fmt.format(paidAmount)}'),
+                            _previewRow('Balance Due:', 'Rs. ${_fmt.format(balance)}', bold: true),
                           ],
 
                           _previewDashedDivider(is3Inch),
@@ -474,7 +489,7 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                 ),
                 const SizedBox(width: 8),
 
-                // System Print / Wi-Fi Print
+                // System Print Dialog (Preview with exact roll dimensions)
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => PdfService.printThermalReceipt(
@@ -482,8 +497,8 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                       is3Inch: is3Inch,
                       companyProfile: _companyProfile,
                     ),
-                    icon: const Icon(Icons.print_rounded, size: 18),
-                    label: const Text('System Print'),
+                    icon: const Icon(Icons.preview_rounded, size: 18),
+                    label: const Text('System Dialog'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       side: const BorderSide(color: AppColors.primary),
@@ -495,10 +510,10 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                 ),
                 const SizedBox(width: 8),
 
-                // Bluetooth Print Button
+                // Direct Thermal Print Button (Instant Print, No Windows Dialog, Exact Roll Cut)
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _isPrinting ? null : _handleBluetoothPrint,
+                    onPressed: _isPrinting ? null : _handleDirectPrint,
                     icon: _isPrinting
                         ? const SizedBox(
                             width: 16,
@@ -508,13 +523,13 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.bluetooth_connected_rounded,
-                            size: 18),
-                    label: Text(_isPrinting ? 'Printing…' : 'BT Print'),
+                        : const Icon(Icons.print_rounded, size: 18),
+                    label: Text(_isPrinting ? 'Printing…' : 'Direct Print'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       backgroundColor: const Color(0xFF1A73E8),
                       foregroundColor: Colors.white,
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                     ),
@@ -528,28 +543,29 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
     );
   }
 
-  // ── Bluetooth Printing Logic ────────────────────────────────────────────────
-  Future<void> _handleBluetoothPrint() async {
+  // ── Direct Thermal Printing Logic ───────────────────────────────────────────
+  Future<void> _handleDirectPrint() async {
     final is3Inch = _paperWidth == '80mm';
 
-    if (!_printerService.isConnected) {
-      // Prompt user to connect printer first
-      _showBluetoothScanner();
-      return;
+    if (!_printerService.isPrinterReady) {
+      // Prompt user to select or connect a printer first
+      await _openPrinterPicker();
+      if (!_printerService.isPrinterReady) return;
     }
 
     setState(() => _isPrinting = true);
-    final success = await _printerService.printThermalInvoice(
+    final success = await _printerService.printDirectInvoice(
       invoice: widget.invoice,
       is3Inch: is3Inch,
       companyProfile: _companyProfile,
     );
+
     if (mounted) {
       setState(() => _isPrinting = false);
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Receipt printed successfully via Bluetooth!'),
+            content: Text('Receipt sent directly to thermal printer!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
           ),
@@ -557,27 +573,33 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to print receipt. Check printer connection.'),
-            backgroundColor: Colors.redAccent,
+          SnackBar(
+            content: const Text(
+                'Direct print failed. Opening system print preview...'),
+            backgroundColor: Colors.orange.shade800,
             behavior: SnackBarBehavior.floating,
           ),
+        );
+        // Fallback to system spooler dialog with correct roll format
+        await PdfService.printThermalReceipt(
+          widget.invoice,
+          is3Inch: is3Inch,
+          companyProfile: _companyProfile,
         );
       }
     }
   }
 
-  // ── Bluetooth Device Scanner Sheet ──────────────────────────────────────────
-  void _showBluetoothScanner() {
-    showModalBottomSheet(
+  // ── Unified Printer Picker Sheet ────────────────────────────────────────────
+  Future<void> _openPrinterPicker() async {
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => BluetoothDevicePicker(
+      builder: (ctx) => UnifiedPrinterPicker(
         printerService: _printerService,
-        onConnected: (device) {
-          setState(() {});
-          Navigator.pop(ctx);
+        onSelected: () {
+          if (mounted) setState(() {});
         },
       ),
     );
@@ -666,7 +688,593 @@ class _PaperSizeButton extends StatelessWidget {
   }
 }
 
-// ── Bluetooth Device Picker Modal ────────────────────────────────────────────
+// ── Unified Printer Picker Modal (Windows / USB / Network & Bluetooth) ────────
+class UnifiedPrinterPicker extends StatefulWidget {
+  final ThermalPrinterService printerService;
+  final VoidCallback onSelected;
+
+  const UnifiedPrinterPicker({
+    super.key,
+    required this.printerService,
+    required this.onSelected,
+  });
+
+  @override
+  State<UnifiedPrinterPicker> createState() => _UnifiedPrinterPickerState();
+}
+
+class _UnifiedPrinterPickerState extends State<UnifiedPrinterPicker>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<Printer> _systemPrinters = [];
+  bool _loadingSystem = true;
+  bool _isTesting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Default to Windows/USB tab on desktop, otherwise Bluetooth if preferred
+    final initialIndex = widget.printerService.isDesktopPlatform ? 0 : 0;
+    _tabController = TabController(length: 2, vsync: this, initialIndex: initialIndex);
+    _loadSystemPrinters();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSystemPrinters() async {
+    setState(() => _loadingSystem = true);
+    final list = await widget.printerService.getSystemPrinters();
+    if (mounted) {
+      setState(() {
+        _systemPrinters = list;
+        _loadingSystem = false;
+      });
+    }
+  }
+
+  bool _isThermalPrinter(String name) {
+    final lower = name.toLowerCase();
+    const keywords = [
+      'pos',
+      'thermal',
+      'receipt',
+      '80',
+      '58',
+      'xp-',
+      'xprinter',
+      'epson',
+      'tvs',
+      'rp',
+      'zj',
+      'bill',
+      'sprt',
+      'hoin',
+    ];
+    return keywords.any((kw) => lower.contains(kw));
+  }
+
+  Future<void> _selectSystemPrinter(Printer printer) async {
+    await widget.printerService.setSystemPrinter(printer);
+    widget.onSelected();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Selected "${printer.name}" as Thermal Printer'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _testPrintSystemPrinter(Printer printer) async {
+    setState(() => _isTesting = true);
+    final ok = await PdfService.directPrintTestReceipt(printer: printer);
+    if (mounted) {
+      setState(() => _isTesting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Test receipt sent to "${printer.name}"!'
+                : 'Failed to send test receipt to "${printer.name}". Check cable & driver.',
+          ),
+          backgroundColor: ok ? Colors.green : Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeSystem = widget.printerService.selectedSystemPrinter;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.print_rounded,
+                    color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select Thermal Printer',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : AppColors.onSurface,
+                      ),
+                    ),
+                    Text(
+                      'Windows / USB Spooler & Bluetooth',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white54 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Tabs
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.darkSurfaceElevated
+                  : AppColors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              labelColor: Colors.white,
+              unselectedLabelColor:
+                  isDark ? Colors.white60 : Colors.grey.shade700,
+              labelStyle:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              tabs: const [
+                Tab(
+                  iconMargin: EdgeInsets.zero,
+                  text: 'Windows / USB Printers',
+                ),
+                Tab(
+                  iconMargin: EdgeInsets.zero,
+                  text: 'Bluetooth Printers',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Tab views
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Tab 1: System / Windows Printers
+                _buildSystemPrintersTab(isDark, activeSystem),
+
+                // Tab 2: Bluetooth Printers
+                BluetoothDevicePickerView(
+                  printerService: widget.printerService,
+                  onConnected: (dev) {
+                    widget.onSelected();
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSystemPrintersTab(bool isDark, Printer? activeSystem) {
+    if (_loadingSystem) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_systemPrinters.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.print_disabled_rounded,
+                size: 44, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            const Text(
+              'No installed Windows printers found',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Install your thermal printer driver (POS-80, XP-80, etc.) in Windows Settings.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _loadSystemPrinters,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh Printers'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Found ${_systemPrinters.length} installed printers',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                ),
+              ),
+              InkWell(
+                onTap: _loadSystemPrinters,
+                child: const Row(
+                  children: [
+                    Icon(Icons.refresh_rounded,
+                        size: 14, color: AppColors.primary),
+                    SizedBox(width: 4),
+                    Text(
+                      'Refresh',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            itemCount: _systemPrinters.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final printer = _systemPrinters[index];
+              final isSelected = activeSystem?.url == printer.url ||
+                  (activeSystem?.name == printer.name);
+              final isThermal = _isThermalPrinter(printer.name);
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary.withValues(alpha: 0.08)
+                      : (isDark
+                          ? AppColors.darkSurfaceElevated
+                          : AppColors.surfaceContainerLow),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primary
+                        : (isDark
+                            ? AppColors.darkBorder
+                            : Colors.grey.shade200),
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  leading: CircleAvatar(
+                    backgroundColor: isSelected
+                        ? AppColors.primary
+                        : (isThermal
+                            ? Colors.green.shade100
+                            : Colors.grey.shade200),
+                    child: Icon(
+                      Icons.print_rounded,
+                      size: 20,
+                      color: isSelected
+                          ? Colors.white
+                          : (isThermal
+                              ? Colors.green.shade800
+                              : Colors.grey.shade700),
+                    ),
+                  ),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          printer.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isDark ? Colors.white : AppColors.onSurface,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isThermal) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Thermal POS',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  subtitle: Text(
+                    printer.isDefault
+                        ? 'Windows Default Printer'
+                        : (printer.model ?? 'System Printer'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white54 : Colors.grey.shade600,
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: _isTesting
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.receipt_long_rounded, size: 18),
+                        tooltip: 'Test Print',
+                        onPressed: _isTesting
+                            ? null
+                            : () => _testPrintSystemPrinter(printer),
+                      ),
+                      const SizedBox(width: 4),
+                      ElevatedButton(
+                        onPressed: () => _selectSystemPrinter(printer),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isSelected
+                              ? Colors.green
+                              : AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          minimumSize: Size.zero,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text(
+                          isSelected ? 'Selected' : 'Use',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Bluetooth Device Picker View ─────────────────────────────────────────────
+class BluetoothDevicePickerView extends StatefulWidget {
+  final ThermalPrinterService printerService;
+  final Function(PrinterDevice) onConnected;
+
+  const BluetoothDevicePickerView({
+    super.key,
+    required this.printerService,
+    required this.onConnected,
+  });
+
+  @override
+  State<BluetoothDevicePickerView> createState() =>
+      _BluetoothDevicePickerViewState();
+}
+
+class _BluetoothDevicePickerViewState extends State<BluetoothDevicePickerView> {
+  List<PrinterDevice> _devices = [];
+  bool _isScanning = true;
+  String? _connectingAddress;
+
+  @override
+  void initState() {
+    super.initState();
+    _scan();
+  }
+
+  Future<void> _scan() async {
+    setState(() => _isScanning = true);
+    final list = await widget.printerService.getDevices();
+    if (mounted) {
+      setState(() {
+        _devices = list;
+        _isScanning = false;
+      });
+    }
+  }
+
+  Future<void> _connect(PrinterDevice device) async {
+    setState(() => _connectingAddress = device.address);
+    final ok = await widget.printerService.connect(device);
+    if (mounted) {
+      setState(() => _connectingAddress = null);
+      if (ok) {
+        widget.onConnected(device);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not pair with Bluetooth printer.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (!_isScanning && _devices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.bluetooth_disabled_rounded,
+                size: 40, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text(
+              'No Bluetooth printers found',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : AppColors.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Make sure printer Bluetooth is ON and paired.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _scan,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Scan Again'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        if (_isScanning)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: LinearProgressIndicator(),
+          ),
+        Expanded(
+          child: ListView.separated(
+            itemCount: _devices.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              color: isDark ? AppColors.darkBorder : Colors.grey.shade200,
+            ),
+            itemBuilder: (context, i) {
+              final dev = _devices[i];
+              final isConnecting = _connectingAddress == dev.address;
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: isDark
+                      ? AppColors.darkSurfaceElevated
+                      : AppColors.surfaceContainerLow,
+                  child: const Icon(Icons.print_rounded,
+                      color: AppColors.primary, size: 20),
+                ),
+                title: Text(
+                  dev.name.isNotEmpty ? dev.name : 'Unknown Device',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : AppColors.onSurface,
+                  ),
+                ),
+                subtitle: Text(
+                  dev.address ?? '',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white54 : Colors.grey.shade600,
+                  ),
+                ),
+                trailing: isConnecting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : ElevatedButton(
+                        onPressed: () => _connect(dev),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Text('Connect',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Bluetooth Device Picker Modal (Legacy Compatibility) ─────────────────────
 // ── Public Bluetooth Device Scanner Sheet ────────────────────────────────────
 class BluetoothDevicePicker extends StatefulWidget {
   final ThermalPrinterService printerService;

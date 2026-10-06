@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'core/theme.dart';
 import 'services/hive_service.dart';
 import 'services/theme_service.dart';
+import 'services/alert_service.dart';
 import 'views/splash/splash_screen.dart';
 
 void main() async {
@@ -16,6 +18,9 @@ void main() async {
 
   // Initialize Theme Service
   await ThemeService.init();
+
+  // Initialize Alert Service
+  AlertService.init();
 
   runApp(const SparkApp());
 }
@@ -31,6 +36,18 @@ class SparkApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.themeModeNotifier,
       builder: (context, themeMode, _) {
+        final isDark = themeMode == ThemeMode.dark;
+        SystemChrome.setSystemUIOverlayStyle(
+          SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness:
+                isDark ? Brightness.light : Brightness.dark,
+          ),
+        );
+
         return MaterialApp(
           navigatorKey: navigatorKey,
           title: 'Spark+',

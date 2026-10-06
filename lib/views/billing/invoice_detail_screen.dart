@@ -42,8 +42,11 @@ class InvoiceDetailScreen extends StatelessWidget {
         statusColor = Colors.redAccent;
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor:
+          isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
         title: Text(invoice['invoiceNumber'] ?? 'Invoice'),
         actions: [
@@ -207,7 +210,9 @@ class InvoiceDetailScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
+                      color: isDark
+                          ? AppColors.darkSurfaceElevated
+                          : AppColors.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Row(
@@ -450,17 +455,21 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppColors.darkSurface : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: AppColors.outlineVariant.withOpacity(0.12)),
+        border: Border.all(
+          color: isDark
+              ? AppColors.darkBorder
+              : AppColors.outlineVariant.withValues(alpha: 0.12),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.025),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -473,10 +482,13 @@ class _InfoCard extends StatelessWidget {
             Text(
               title!.toUpperCase(),
               style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                  color: AppColors.onSurfaceVariant.withOpacity(0.4)),
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+                color: isDark
+                    ? AppColors.darkText50
+                    : AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
             ),
             const SizedBox(height: 14),
           ],

@@ -414,30 +414,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ── Bluetooth Printer Scanner & Test Print ────────────────────────────────
-  void _openBluetoothScanner() {
+  // ── Unified Thermal Printer Picker & Test Print ───────────────────────────
+  void _openPrinterPicker() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => BluetoothDevicePicker(
+      builder: (ctx) => UnifiedPrinterPicker(
         printerService: _printerService,
-        onConnected: (device) {
+        onSelected: () {
           setState(() {});
-          Navigator.pop(ctx);
         },
       ),
     );
   }
 
   Future<void> _handleTestPrint() async {
-    if (!_printerService.isConnected) {
-      _openBluetoothScanner();
+    if (!_printerService.isPrinterReady) {
+      _openPrinterPicker();
       return;
     }
 
     setState(() => _isTestingPrinter = true);
-    final ok = await _printerService.printTestReceipt(
+    final ok = await _printerService.printDirectTestReceipt(
       is3Inch: _defaultPrintMode == 'thermal-80',
     );
     if (mounted) {
@@ -446,8 +445,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text(
             ok
-                ? 'Test receipt sent to printer!'
-                : 'Could not print test receipt. Check printer power & paper.',
+                ? 'Test receipt sent to "${_printerService.activePrinterDisplayName}"!'
+                : 'Could not print test receipt. Check printer power & connection.',
           ),
           backgroundColor: ok ? Colors.green : Colors.redAccent,
           behavior: SnackBarBehavior.floating,
@@ -1078,8 +1077,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Tab 2: Invoicing & Printer Settings ────────────────────────────────────
   Widget _buildInvoicingTab(
       bool isDark, String invoicePreview, String counterStr) {
-    final connected = _printerService.connectedDevice;
-
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
@@ -1291,8 +1288,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
 
             const SizedBox(height: 24),
-            _sectionTitle(isDark, 'Bluetooth Thermal Printer',
-                subtitle: 'Pair & test ESC/POS thermal receipt printers'),
+            _sectionTitle(isDark, 'Thermal Receipt Printer',
+                subtitle: 'Windows / USB Spooler & Bluetooth POS Printers'),
             const SizedBox(height: 12),
 
             _cardContainer(
@@ -1305,14 +1302,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: connected != null
+                          color: _printerService.isPrinterReady
                               ? Colors.green.withValues(alpha: 0.15)
                               : Colors.amber.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Icon(
-                          Icons.print_rounded,
-                          color: connected != null
+                          _printerService.hasSystemPrinter
+                              ? Icons.print_rounded
+                              : (_printerService.isConnected
+                                  ? Icons.bluetooth_connected_rounded
+                                  : Icons.print_outlined),
+                          color: _printerService.isPrinterReady
                               ? Colors.greenAccent
                               : Colors.amber,
                           size: 24,
@@ -1324,11 +1325,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              connected != null
-                                  ? (connected.name.isNotEmpty
-                                      ? connected.name
-                                      : 'Connected Printer')
-                                  : 'No Printer Paired',
+                              _printerService.hasSystemPrinter
+                                  ? _printerService.selectedSystemPrinter!.name
+                                  : (_printerService.isConnected
+                                      ? (_printerService.connectedDevice!.name.isNotEmpty
+                                          ? _printerService.connectedDevice!.name
+                                          : 'Bluetooth Printer')
+                                      : 'No Printer Selected'),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
@@ -1338,9 +1341,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             Text(
-                              connected != null
-                                  ? '${connected.address} · Ready to print'
-                                  : 'Tap below to scan & connect via Bluetooth',
+                              _printerService.hasSystemPrinter
+                                  ? 'Windows / USB Driver · Ready for Direct Print'
+                                  : (_printerService.isConnected
+                                      ? '${_printerService.connectedDevice!.address} · Bluetooth Ready'
+                                      : 'Tap below to select Windows/USB or Bluetooth printer'),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: isDark
@@ -1355,17 +1360,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: connected != null
+                          color: _printerService.isPrinterReady
                               ? Colors.green.withValues(alpha: 0.15)
                               : Colors.grey.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          connected != null ? 'Online' : 'Offline',
+                          _printerService.isPrinterReady ? 'Ready' : 'Offline',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: connected != null
+                            color: _printerService.isPrinterReady
                                 ? Colors.green
                                 : Colors.grey,
                           ),
@@ -1379,11 +1384,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _openBluetoothScanner,
-                          icon: const Icon(Icons.bluetooth_searching_rounded,
+                          onPressed: _openPrinterPicker,
+                          icon: const Icon(Icons.settings_suggest_rounded,
                               size: 18),
-                          label: Text(
-                              connected != null ? 'Change' : 'Scan & Pair'),
+                          label: Text(_printerService.isPrinterReady
+                              ? 'Change Printer'
+                              : 'Select Printer'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primaryLight,
                             side: const BorderSide(color: AppColors.primary),
@@ -1395,7 +1401,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: _isTestingPrinter ? null : _handleTestPrint,
+                          onPressed:
+                              _isTestingPrinter ? null : _handleTestPrint,
                           icon: _isTestingPrinter
                               ? const SizedBox(
                                   width: 16,

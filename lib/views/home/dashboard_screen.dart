@@ -8,7 +8,7 @@ import '../alerts/alerts_screen.dart';
 import '../billing/create_invoice_screen.dart';
 import '../billing/invoice_detail_screen.dart';
 import '../inventory/add_product_dialog.dart';
-import '../inventory/scanner_screen.dart';
+import '../../widgets/compact_barcode_scanner_dialog.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int)? onNavigate;
@@ -141,9 +141,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                     // ── 5. Recent 5 Invoices ─────────────────────────────────
                     final recentInvoices = salesDocs.take(5).toList();
+                    final isDark =
+                        Theme.of(context).brightness == Brightness.dark;
 
                     return Scaffold(
-                      backgroundColor: AppColors.surface,
+                      backgroundColor: isDark
+                          ? AppColors.darkBackground
+                          : AppColors.lightBackground,
                       body: isInitialLoading
                           ? const Center(child: CircularProgressIndicator())
                           : RefreshIndicator(
@@ -627,6 +631,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required double totalExpenses,
     required double netMargin,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         Row(
@@ -635,15 +640,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: _BentoCard(
                 icon: Icons.shopping_bag_rounded,
-                iconColor: const Color(0xFF7C3AED),
-                iconBg: const Color(0xFFF3E8FF),
+                iconColor: const Color(0xFF8B5CF6),
+                iconBg: isDark
+                    ? const Color(0xFF8B5CF6).withValues(alpha: 0.20)
+                    : const Color(0xFFF3E8FF),
                 title: 'PURCHASES',
                 value: '₹${_fmt.format(purchasesTotal)}',
                 subtitle:
                     '$purchasesCount orders • Dues: ₹${_fmt.format(supplierDues)}',
                 subtitleColor: supplierDues > 0
-                    ? Colors.orange.shade800
-                    : Colors.grey.shade600,
+                    ? (isDark ? const Color(0xFFFBBF24) : Colors.orange.shade800)
+                    : (isDark ? AppColors.darkText50 : Colors.grey.shade600),
                 onTap: () {},
               ),
             ),
@@ -653,8 +660,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: _BentoCard(
                 icon: Icons.inventory_2_rounded,
-                iconColor: const Color(0xFF0284C7),
-                iconBg: const Color(0xFFE0F2FE),
+                iconColor: const Color(0xFF38BDF8),
+                iconBg: isDark
+                    ? const Color(0xFF38BDF8).withValues(alpha: 0.20)
+                    : const Color(0xFFE0F2FE),
                 title: 'INVENTORY VALUE',
                 value: '₹${_fmt.format(stockValuation)}',
                 subtitle: '$productsCount products catalogued',
@@ -670,8 +679,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: _BentoCard(
                 icon: Icons.account_balance_wallet_rounded,
-                iconColor: const Color(0xFFE11D48),
-                iconBg: const Color(0xFFFFE4E6),
+                iconColor: const Color(0xFFF43F5E),
+                iconBg: isDark
+                    ? const Color(0xFFF43F5E).withValues(alpha: 0.20)
+                    : const Color(0xFFFFE4E6),
                 title: 'EXPENSES',
                 value: '₹${_fmt.format(totalExpenses)}',
                 subtitle: 'Track operational costs',
@@ -684,16 +695,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: _BentoCard(
                 icon: Icons.trending_up_rounded,
-                iconColor: const Color(0xFF059669),
-                iconBg: const Color(0xFFD1FAE5),
+                iconColor: const Color(0xFF10B981),
+                iconBg: isDark
+                    ? const Color(0xFF10B981).withValues(alpha: 0.20)
+                    : const Color(0xFFD1FAE5),
                 title: 'NET MARGIN',
                 value: '₹${_fmt.format(netMargin)}',
                 subtitle: netMargin >= 0
                     ? 'Profitable operations'
                     : 'Expenses exceed sales',
                 subtitleColor: netMargin >= 0
-                    ? const Color(0xFF059669)
-                    : Colors.redAccent,
+                    ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
+                    : (isDark ? const Color(0xFFF87171) : Colors.redAccent),
                 onTap: () {},
               ),
             ),
@@ -705,16 +718,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ── 3. Quick Actions Hub ───────────────────────────────────────────────────
   Widget _buildQuickActionsHub() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'QUICK ACTIONS',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.2,
-            color: Colors.grey,
+            color: isDark ? AppColors.darkText50 : AppColors.lightText50,
           ),
         ),
         const SizedBox(height: 10),
@@ -723,8 +737,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _QuickActionTile(
               label: 'New Bill',
               icon: Icons.add_circle_rounded,
-              color: AppColors.primary,
-              bgColor: AppColors.primary.withValues(alpha: 0.1),
+              color: isDark ? AppColors.primaryLight : AppColors.primary,
+              bgColor: AppColors.primary
+                  .withValues(alpha: isDark ? 0.25 : 0.10),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -735,8 +750,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _QuickActionTile(
               label: 'Add Item',
               icon: Icons.inventory_rounded,
-              color: const Color(0xFF7C3AED),
-              bgColor: const Color(0xFFF3E8FF),
+              color: isDark
+                  ? const Color(0xFFA78BFA)
+                  : const Color(0xFF7C3AED),
+              bgColor: (isDark
+                      ? const Color(0xFFA78BFA)
+                      : const Color(0xFF7C3AED))
+                  .withValues(alpha: isDark ? 0.25 : 0.12),
               onTap: () => showDialog(
                 context: context,
                 builder: (_) => const AddProductDialog(),
@@ -746,19 +766,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _QuickActionTile(
               label: 'Scan',
               icon: Icons.qr_code_scanner_rounded,
-              color: const Color(0xFF0284C7),
-              bgColor: const Color(0xFFE0F2FE),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ScannerScreen()),
-              ),
+              color: isDark
+                  ? const Color(0xFF38BDF8)
+                  : const Color(0xFF0284C7),
+              bgColor: (isDark
+                      ? const Color(0xFF38BDF8)
+                      : const Color(0xFF0284C7))
+                  .withValues(alpha: isDark ? 0.25 : 0.12),
+              onTap: () async {
+                final code = await CompactBarcodeScannerDialog.show(context);
+                if (code == null || code.isEmpty || !mounted) return;
+                final product = HiveService.getProductByBarcode(code);
+                if (!mounted) return;
+                if (product != null) {
+                  showDialog(
+                    context: context,
+                    builder: (_) => AddProductDialog(productToEdit: product),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Barcode "$code" not found in inventory'),
+                      action: SnackBarAction(
+                        label: 'Add New',
+                        textColor: AppColors.primaryLight,
+                        onPressed: () {
+                          if (mounted) {
+                            showDialog(
+                              context: context,
+                              builder: (_) => const AddProductDialog(),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  );
+                }
+              },
             ),
             const SizedBox(width: 10),
             _QuickActionTile(
               label: 'Alerts',
               icon: Icons.notifications_active_rounded,
-              color: const Color(0xFFD97706),
-              bgColor: const Color(0xFFFEF3C7),
+              color: isDark
+                  ? const Color(0xFFFBBF24)
+                  : const Color(0xFFD97706),
+              bgColor: (isDark
+                      ? const Color(0xFFFBBF24)
+                      : const Color(0xFFD97706))
+                  .withValues(alpha: isDark ? 0.25 : 0.12),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AlertsScreen()),
@@ -940,7 +996,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       color:
-                          isDark ? AppColors.darkText50 : AppColors.lightText50,
+                          isDark ? AppColors.darkText70 : AppColors.lightText50,
                     ),
                   ),
                   trailing: Text(

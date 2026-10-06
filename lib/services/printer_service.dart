@@ -1,25 +1,228 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:pos_universal_printer/pos_universal_printer.dart';
-import 'package:pos_universal_printer/blue_thermal_compat.dart';
+import 'package:printing/printing.dart';
 import '../core/models/models.dart';
 import '../core/models/shop_settings.dart';
 import 'hive_service.dart';
+import 'pdf_service.dart';
 
 class ThermalPrinterService {
   static final ThermalPrinterService _instance =
       ThermalPrinterService._internal();
   factory ThermalPrinterService() => _instance;
-  ThermalPrinterService._internal();
+  ThermalPrinterService._internal() {
+    _restoreSavedSystemPrinter();
+  }
 
   final BlueThermalCompatPrinter bluetooth = BlueThermalCompatPrinter.instance;
   final PosUniversalPrinter _manager = PosUniversalPrinter.instance;
 
+  // ── Bluetooth Connection State (Mobile / Android) ──────────────────────────
   PrinterDevice? _connectedDevice;
   PrinterDevice? get connectedDevice => _connectedDevice;
   bool get isConnected => _connectedDevice != null;
 
-  /// Scans for available Bluetooth printers
+  // ── Windows / Desktop / Spooler Printer State ─────────────────────────────
+  Printer? _selectedSystemPrinter;
+  Printer? get selectedSystemPrinter => _selectedSystemPrinter;
+  bool get hasSystemPrinter => _selectedSystemPrinter != null;
+
+  /// True if any printer (Bluetooth or Windows/System) is ready for direct printing
+  bool get isPrinterReady => isConnected || hasSystemPrinter;
+
+  /// Display name of the active printer
+  String get activePrinterDisplayName {
+    if (_selectedSystemPrinter != null) {
+      return _selectedSystemPrinter!.name;
+    }
+    if (_connectedDevice != null) {
+      return _connectedDevice!.name.isNotEmpty
+          ? _connectedDevice!.name
+          : _connectedDevice!.address ?? 'Bluetooth Printer';
+    }
+    return 'No Printer Selected';
+  }
+
+  /// Whether current platform is desktop (Windows, macOS, Linux)
+  bool get isDesktopPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
+
+  /// Restores previously saved system printer from Hive
+  Future<void> _restoreSavedSystemPrinter() async {
+    try {
+      final savedUrl = HiveService.getSelectedPrinterUrl();
+      final savedName = HiveService.getSelectedPrinterName();
+      if (savedUrl == null && savedName == null) return;
+
+      final printers = await Printing.listPrinters();
+      for (final p in printers) {
+        if ((savedUrl != null && p.url == savedUrl) ||
+            (savedName != null && p.name == savedName)) {
+          _selectedSystemPrinter = p;
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error restoring saved system printer: $e');
+    }
+  }
+
+  /// Fetches all system installed printers (Windows Spooler / CUPS)
+  Future<List<Printer>> getSystemPrinters() async {
+    try {
+      return await Printing.listPrinters();
+    } catch (e) {
+      debugPrint('Error listing system printers: $e');
+      return [];
+    }
+  }
+
+  /// Sets and saves the system thermal printer to Hive
+  Future<void> setSystemPrinter(Printer printer) async {
+    _selectedSystemPrinter = printer;
+    await HiveService.setSelectedPrinter(
+      url: printer.url,
+      name: printer.name,
+    );
+  }
+
+  /// Clears active system printer
+  Future<void> clearSystemPrinter() async {
+    _selectedSystemPrinter = null;
+    await HiveService.setSelectedPrinter(url: null, name: null);
+  }
+
+  /// Scans system printers for ones likely to be thermal / POS receipt printers
+  Future<Printer?> autoDetectThermalPrinter() async {
+    try {
+      final printers = await getSystemPrinters();
+      if (printers.isEmpty) return null;
+
+      const thermalKeywords = [
+        'pos',
+        'thermal',
+        'receipt',
+        '80',
+        '58',
+        'xp-',
+        'xprinter',
+        'epson',
+        'tvs',
+        'rp',
+        'zj',
+        'bill',
+        'sprt',
+        'hoin',
+      ];
+
+      for (final printer in printers) {
+        final nameLower = printer.name.toLowerCase();
+        for (final kw in thermalKeywords) {
+          if (nameLower.contains(kw)) {
+            return printer;
+          }
+        }
+      }
+
+      // Default fallback to system default printer if available
+      return printers.cast<Printer?>().firstWhere(
+            (p) => p?.isDefault ?? false,
+            orElse: () => printers.first,
+          );
+    } catch (e) {
+      debugPrint('Error auto-detecting thermal printer: $e');
+      return null;
+    }
+  }
+
+  /// Direct 1-Click Thermal Print (Instant, no Windows print dialog, correct roll sizing)
+  Future<bool> printDirectInvoice({
+    required Map<String, dynamic> invoice,
+    bool is3Inch = true,
+    Map<String, dynamic>? companyProfile,
+    Printer? overridePrinter,
+  }) async {
+    try {
+      // 1. Try Windows/System Direct Print first if configured or override provided
+      final targetPrinter = overridePrinter ?? _selectedSystemPrinter;
+      if (targetPrinter != null) {
+        return await PdfService.directPrintThermalReceipt(
+          invoice: invoice,
+          printer: targetPrinter,
+          is3Inch: is3Inch,
+          companyProfile: companyProfile,
+        );
+      }
+
+      // 2. If running on desktop/Windows and no printer is chosen, try auto-detecting
+      if (isDesktopPlatform) {
+        final detected = await autoDetectThermalPrinter();
+        if (detected != null) {
+          await setSystemPrinter(detected);
+          return await PdfService.directPrintThermalReceipt(
+            invoice: invoice,
+            printer: detected,
+            is3Inch: is3Inch,
+            companyProfile: companyProfile,
+          );
+        }
+      }
+
+      // 3. Fallback to Bluetooth ESC/POS if connected (Mobile)
+      if (isConnected) {
+        return await printThermalInvoice(
+          invoice: invoice,
+          is3Inch: is3Inch,
+          companyProfile: companyProfile,
+        );
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Direct thermal print error: $e');
+      return false;
+    }
+  }
+
+  /// Direct Test Receipt (Works on both Windows Thermal Printers and Bluetooth)
+  Future<bool> printDirectTestReceipt({bool is3Inch = true}) async {
+    try {
+      if (_selectedSystemPrinter != null) {
+        return await PdfService.directPrintTestReceipt(
+          printer: _selectedSystemPrinter!,
+          is3Inch: is3Inch,
+        );
+      }
+
+      if (isDesktopPlatform) {
+        final detected = await autoDetectThermalPrinter();
+        if (detected != null) {
+          await setSystemPrinter(detected);
+          return await PdfService.directPrintTestReceipt(
+            printer: detected,
+            is3Inch: is3Inch,
+          );
+        }
+      }
+
+      if (isConnected) {
+        return await printTestReceipt(is3Inch: is3Inch);
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Direct test print error: $e');
+      return false;
+    }
+  }
+
+  /// Scans for available Bluetooth printers (Android/iOS)
   Future<List<PrinterDevice>> getDevices() async {
     final devices = <PrinterDevice>[];
     try {
@@ -137,8 +340,8 @@ class ThermalPrinterService {
         bluetooth.printCustom(name, 1, 0);
         // Print qty, price and total on next line
         bluetooth.printLeftRight(
-          "  $qty x ₹${fmt.format(price)}",
-          "₹${fmt.format(itemTotal)}",
+          "  $qty x Rs. ${fmt.format(price)}",
+          "Rs. ${fmt.format(itemTotal)}",
           1,
         );
       }
@@ -146,11 +349,18 @@ class ThermalPrinterService {
       bluetooth.printCustom(divider, 1, 1);
 
       // ── Totals ──────────────────────────────────────────────────────────
-      bluetooth.printLeftRight("Subtotal:", "₹${fmt.format(subtotal)}", 1);
-      bluetooth.printLeftRight("GST:", "₹${fmt.format(gstAmount)}", 1);
-      bluetooth.printLeftRight("TOTAL:", "₹${fmt.format(total)}", 2);
+      bluetooth.printLeftRight("Subtotal:", "Rs. ${fmt.format(subtotal)}", 1);
+      bluetooth.printLeftRight("GST:", "Rs. ${fmt.format(gstAmount)}", 1);
+      bluetooth.printLeftRight("TOTAL:", "Rs. ${fmt.format(total)}", 2);
       bluetooth.printLeftRight("Payment Mode:", paymentMode, 1);
       bluetooth.printLeftRight("Payment Status:", status.toUpperCase(), 1);
+      final double paidAmount =
+          (invoice['paidAmount'] ?? invoice['amountPaid'] ?? 0).toDouble();
+      final double balance = (total - paidAmount).clamp(0.0, total);
+      if (paidAmount > 0 && paidAmount < total) {
+        bluetooth.printLeftRight("Paid:", "Rs. ${fmt.format(paidAmount)}", 1);
+        bluetooth.printLeftRight("Balance:", "Rs. ${fmt.format(balance)}", 1);
+      }
 
       bluetooth.printCustom(divider, 1, 1);
 
@@ -201,14 +411,63 @@ class ThermalPrinterService {
 
   /// Label print for inventory
   Future<void> printLabel(Product product) async {
-    bluetooth.printCustom("WINTECH SPARK", 2, 1);
-    bluetooth.printCustom(product.productName, 1, 1);
-    bluetooth.printCustom("PRICE: ${product.sellingPrice}", 2, 1);
-    if (product.barcode != null) {
-      bluetooth.printQRcode(product.barcode!);
+    if (_selectedSystemPrinter != null) {
+      final doc = pw.Document();
+      doc.addPage(
+        pw.Page(
+          pageFormat: const PdfPageFormat(
+            50 * PdfPageFormat.mm,
+            30 * PdfPageFormat.mm,
+            marginAll: 2 * PdfPageFormat.mm,
+          ),
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                pw.Text('WINTECH SPARK',
+                    style: pw.TextStyle(
+                        fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                pw.Text(product.productName,
+                    maxLines: 1, style: const pw.TextStyle(fontSize: 7)),
+                pw.Text('PRICE: Rs. ${product.sellingPrice}',
+                    style: pw.TextStyle(
+                        fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                if (product.barcode != null && product.barcode!.isNotEmpty)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(top: 2),
+                    child: pw.BarcodeWidget(
+                      barcode: pw.Barcode.code128(),
+                      data: product.barcode!,
+                      width: 80,
+                      height: 14,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      );
+      final bytes = await doc.save();
+      await Printing.directPrintPdf(
+        printer: _selectedSystemPrinter!,
+        onLayout: (_) => bytes,
+        format: const PdfPageFormat(50 * PdfPageFormat.mm, 30 * PdfPageFormat.mm),
+        usePrinterSettings: true,
+      );
+      return;
     }
-    bluetooth.printNewLine();
-    bluetooth.paperCut();
+
+    if (isConnected) {
+      bluetooth.printCustom("WINTECH SPARK", 2, 1);
+      bluetooth.printCustom(product.productName, 1, 1);
+      bluetooth.printCustom("PRICE: ${product.sellingPrice}", 2, 1);
+      if (product.barcode != null) {
+        bluetooth.printQRcode(product.barcode!);
+      }
+      bluetooth.printNewLine();
+      bluetooth.paperCut();
+    }
   }
 
   /// Prints a test receipt to verify Bluetooth printer connectivity
