@@ -341,6 +341,85 @@ class InvoiceService {
     }
   }
 
+  // ── WhatsApp Payment Reminder with UPI link ───────────────────────────────
+  static Future<void> sendPaymentReminderViaWhatsApp(
+      Map<String, dynamic> invoice) async {
+    String compName = 'WinTech-Spark';
+    String upiId = '';
+    String bankName = '';
+    String bankAcc = '';
+    String bankIfsc = '';
+
+    try {
+      final compSnap = await _companyProfilesCol
+          .where('isDefault', isEqualTo: true)
+          .limit(1)
+          .get();
+      if (compSnap.docs.isNotEmpty) {
+        final data = compSnap.docs.first.data() as Map<String, dynamic>;
+        compName = data['companyName'] ?? compName;
+        upiId = data['upiId'] ?? '';
+        bankName = data['bankName'] ?? '';
+        bankAcc = data['bankAccount'] ?? data['bankAccountNumber'] ?? '';
+        bankIfsc = data['bankIfsc'] ?? '';
+      }
+    } catch (_) {}
+
+    final invNo = invoice['invoiceNumber'] ?? 'INV';
+    final customerName = invoice['customerName'] ?? 'Valued Customer';
+    final date = DateTime.tryParse(invoice['date'] ?? '') ?? DateTime.now();
+    final dateStr = DateFormat('dd-MMM-yyyy').format(date);
+    final total = (invoice['total'] ?? 0).toDouble();
+    final paid =
+        (invoice['paidAmount'] ?? invoice['amountPaid'] ?? 0).toDouble();
+    final due = (total - paid).clamp(0.0, total);
+
+    String text = '🔔 *PAYMENT REMINDER - $compName*\n\n';
+    text += 'Dear *$customerName*,\n';
+    text += 'This is a gentle reminder regarding pending payment for:\n';
+    text += '📄 *Invoice #:* $invNo\n';
+    text += '📅 *Bill Date:* $dateStr\n';
+    text += '💵 *Bill Amount:* ₹${total.toStringAsFixed(2)}\n';
+    if (paid > 0) {
+      text += '✅ *Amount Paid:* ₹${paid.toStringAsFixed(2)}\n';
+    }
+    text += '⚠️ *Outstanding Due: ₹${due.toStringAsFixed(2)}*\n\n';
+
+    if (upiId.isNotEmpty) {
+      text += '📲 *Pay Easily via UPI:*\n';
+      text += 'UPI ID: `$upiId`\n';
+      final upiLink = 'upi://pay?pa=$upiId&pn=${Uri.encodeComponent(compName)}&am=${due.toStringAsFixed(2)}&cu=INR&tn=${Uri.encodeComponent('Bill $invNo')}';
+      text += 'Pay link: $upiLink\n\n';
+    }
+
+    if (bankName.isNotEmpty && bankAcc.isNotEmpty) {
+      text += '🏦 *Bank Details:*\n';
+      text += 'Bank: $bankName\n';
+      text += 'A/C No: $bankAcc\n';
+      if (bankIfsc.isNotEmpty) text += 'IFSC: $bankIfsc\n';
+      text += '\n';
+    }
+
+    text += 'Please let us know once paid. If already paid, kindly ignore this reminder.\n';
+    text += 'Thank you!\n— *$compName*';
+
+    String phone = (invoice['customerMobile'] ?? '')
+        .toString()
+        .replaceAll(RegExp(r'\D'), '');
+    if (phone.length == 10) {
+      phone = '91$phone';
+    }
+
+    final urlString = phone.isNotEmpty
+        ? 'https://wa.me/$phone?text=${Uri.encodeComponent(text)}'
+        : 'https://wa.me/?text=${Uri.encodeComponent(text)}';
+
+    final uri = Uri.parse(urlString);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   // ── Helper: Convert Firestore doc to usable map ────────────────────────────
   static Map<String, dynamic> fromDoc(QueryDocumentSnapshot doc) {
     return doc.data() as Map<String, dynamic>;

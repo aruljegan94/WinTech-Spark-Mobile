@@ -351,13 +351,17 @@ class ThermalPrinterService {
       // ── Totals ──────────────────────────────────────────────────────────
       bluetooth.printLeftRight("Subtotal:", "Rs. ${fmt.format(subtotal)}", 1);
       bluetooth.printLeftRight("GST:", "Rs. ${fmt.format(gstAmount)}", 1);
+      final double discount = (invoice['discount'] ?? 0).toDouble();
+      if (discount > 0) {
+        bluetooth.printLeftRight("Discount:", "-Rs. ${fmt.format(discount)}", 1);
+      }
       bluetooth.printLeftRight("TOTAL:", "Rs. ${fmt.format(total)}", 2);
       bluetooth.printLeftRight("Payment Mode:", paymentMode, 1);
       bluetooth.printLeftRight("Payment Status:", status.toUpperCase(), 1);
       final double paidAmount =
           (invoice['paidAmount'] ?? invoice['amountPaid'] ?? 0).toDouble();
-      final double balance = (total - paidAmount).clamp(0.0, total);
-      if (paidAmount > 0 && paidAmount < total) {
+      final double balance = (total - paidAmount - discount).clamp(0.0, total);
+      if (paidAmount > 0 && balance > 0.01) {
         bluetooth.printLeftRight("Paid:", "Rs. ${fmt.format(paidAmount)}", 1);
         bluetooth.printLeftRight("Balance:", "Rs. ${fmt.format(balance)}", 1);
       }

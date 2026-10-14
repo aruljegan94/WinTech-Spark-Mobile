@@ -266,6 +266,11 @@ class PdfService {
     // Totals section (subtotal, gst, total box, payment mode, status, divider)
     heightMm += 32.0;
 
+    final double discount = (invoice['discount'] ?? 0).toDouble();
+    if (discount > 0) {
+      heightMm += 4.5;
+    }
+
     final double total = (invoice['total'] ?? 0).toDouble();
     final double paidAmount =
         (invoice['paidAmount'] ?? invoice['amountPaid'] ?? 0).toDouble();
@@ -321,6 +326,7 @@ class PdfService {
     final List items = (invoice['items'] as List?) ?? [];
     final double subtotal = (invoice['subtotal'] ?? 0).toDouble();
     final double gstAmount = (invoice['gstAmount'] ?? 0).toDouble();
+    final double discount = (invoice['discount'] ?? 0).toDouble();
     final double total = (invoice['total'] ?? 0).toDouble();
     final double paidAmount =
         (invoice['paidAmount'] ?? invoice['amountPaid'] ?? 0).toDouble();
@@ -471,6 +477,8 @@ class PdfService {
               // Totals
               _thermalTotalRow('Subtotal:', 'Rs. ${_fmt.format(subtotal)}'),
               _thermalTotalRow('GST:', 'Rs. ${_fmt.format(gstAmount)}'),
+              if (discount > 0)
+                _thermalTotalRow('Discount:', '-Rs. ${_fmt.format(discount)}'),
               pw.Container(
                 decoration: const pw.BoxDecoration(
                   border: pw.Border(

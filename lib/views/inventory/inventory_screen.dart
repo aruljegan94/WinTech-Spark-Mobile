@@ -6,6 +6,7 @@ import '../../core/models/models.dart';
 import '../../services/printer_service.dart';
 import '../../services/hive_service.dart';
 import '../../services/sync_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'add_product_dialog.dart';
 import 'scanner_screen.dart';
 import 'widgets/stock_replenish_sheet.dart';
@@ -140,6 +141,130 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
+  void _showPrintLabelCopiesDialog(Product product) {
+    int copies = 1;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.qr_code_rounded, color: AppColors.primary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Print Barcode Label',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.productName,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                Text(
+                  '₹${product.sellingPrice} • ${product.barcode ?? 'Auto SKU'}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                const Text('Number of Label Stickers:',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: () {
+                        if (copies > 1) setDialogState(() => copies--);
+                      },
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text('$copies',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () {
+                        if (copies < 100) setDialogState(() => copies++);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    ActionChip(
+                      label: const Text('1 copy'),
+                      onPressed: () => setDialogState(() => copies = 1),
+                    ),
+                    ActionChip(
+                      label: const Text('5 copies'),
+                      onPressed: () => setDialogState(() => copies = 5),
+                    ),
+                    ActionChip(
+                      label: const Text('10 copies'),
+                      onPressed: () => setDialogState(() => copies = 10),
+                    ),
+                    if (product.stockQuantity > 0)
+                      ActionChip(
+                        label: Text('Stock (${product.stockQuantity})'),
+                        onPressed: () => setDialogState(
+                            () => copies = product.stockQuantity.clamp(1, 100)),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  for (int i = 0; i < copies; i++) {
+                    await _printerService.printLabel(product);
+                  }
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Printed $copies label(s) for ${product.productName}'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.print_rounded, size: 16),
+                label: Text('Print ($copies)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -227,6 +352,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   stockValue: totalStockValue,
                   lowStock: lowStockCount,
                   outStock: outOfStockCount,
+                ),
+
+                // ── Low Stock & Auto-Reorder Alert Banner ───────────────────
+                _buildLowStockAlertBanner(
+                  isDark: isDark,
+                  lowCount: lowStockCount,
+                  outCount: outOfStockCount,
+                  products: allProducts,
                 ),
 
                 const SizedBox(height: 18),
@@ -535,6 +668,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             label: 'PRODUCTS',
             value: '$totalProducts',
             color: isDark ? AppColors.primaryLight : AppColors.primary,
+            onTap: () => setState(() => _stockFilter = 'All'),
           ),
           _buildKpiDivider(isDark),
 
@@ -547,23 +681,36 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           _buildKpiDivider(isDark),
 
-          // Low Stock Count
+          // Low Stock Count (Interactive Filter)
           _buildKpiItem(
             isDark: isDark,
             label: 'LOW STOCK',
             value: '$lowStock',
             color: const Color(0xFFF59E0B),
             isAlert: lowStock > 0,
+            isSelected: _stockFilter == 'Low Stock',
+            onTap: () {
+              setState(() {
+                _stockFilter = _stockFilter == 'Low Stock' ? 'All' : 'Low Stock';
+              });
+            },
           ),
           _buildKpiDivider(isDark),
 
-          // Out of Stock Count
+          // Out of Stock Count (Interactive Filter)
           _buildKpiItem(
             isDark: isDark,
             label: 'OUT STOCK',
             value: '$outStock',
             color: const Color(0xFFEF4444),
             isAlert: outStock > 0,
+            isSelected: _stockFilter == 'Out of Stock',
+            onTap: () {
+              setState(() {
+                _stockFilter =
+                    _stockFilter == 'Out of Stock' ? 'All' : 'Out of Stock';
+              });
+            },
           ),
         ],
       ),
@@ -576,34 +723,206 @@ class _InventoryScreenState extends State<InventoryScreen> {
     required String value,
     required Color color,
     bool isAlert = false,
+    bool isSelected = false,
+    VoidCallback? onTap,
   }) {
     return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          decoration: isSelected
+              ? BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: color.withValues(alpha: 0.4)),
+                )
+              : null,
+          child: Column(
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: isDark ? AppColors.darkText50 : AppColors.lightText50,
+                ),
+              ),
+              const SizedBox(height: 3),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Low Stock & Auto-Reorder Alert Banner ──────────────────────────────────
+  Widget _buildLowStockAlertBanner({
+    required bool isDark,
+    required int lowCount,
+    required int outCount,
+    required List<Product> products,
+  }) {
+    if (lowCount == 0 && outCount == 0) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF451A03).withValues(alpha: 0.6)
+            : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+        ),
+      ),
       child: Column(
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 8.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-              color: isDark ? AppColors.darkText50 : AppColors.lightText50,
-            ),
-          ),
-          const SizedBox(height: 3),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: color,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.warning_amber_rounded,
+                    color: Color(0xFFF59E0B), size: 18),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Reorder Alert: ${lowCount + outCount} Items Need Attention',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: isDark
+                            ? const Color(0xFFFDE68A)
+                            : const Color(0xFF92400E),
+                      ),
+                    ),
+                    Text(
+                      '$lowCount items low on stock • $outCount completely out',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? const Color(0xFFD97706)
+                            : const Color(0xFFB45309),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _stockFilter =
+                          _stockFilter == 'Low Stock' ? 'All' : 'Low Stock';
+                    });
+                  },
+                  icon: const Icon(Icons.filter_list_rounded, size: 15),
+                  label: Text(
+                    _stockFilter == 'Low Stock'
+                        ? 'Clear Filter'
+                        : 'Filter Low Stock',
+                    style: const TextStyle(
+                        fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    foregroundColor: const Color(0xFFF59E0B),
+                    side: BorderSide(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _shareReorderListViaWhatsApp(products),
+                  icon: const Icon(Icons.chat_rounded, size: 15),
+                  label: const Text(
+                    'Reorder via WhatsApp',
+                    style: TextStyle(
+                        fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    backgroundColor: const Color(0xFF25D366),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  // ── Share Low Stock Reorder List via WhatsApp ──────────────────────────────
+  Future<void> _shareReorderListViaWhatsApp(List<Product> allProducts) async {
+    final needed = allProducts.where((p) => p.stockQuantity < 10).toList();
+    if (needed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All products have adequate stock!')),
+      );
+      return;
+    }
+
+    final dateStr = DateFormat('dd-MMM-yyyy').format(DateTime.now());
+    String text = '📦 *PURCHASE REORDER LIST*\n';
+    text += 'Date: $dateStr\n';
+    text += 'Store: WinTech Spark+\n\n';
+    text += 'Please dispatch the following inventory items:\n';
+
+    int index = 1;
+    for (final p in needed) {
+      final current = p.stockQuantity;
+      final suggestQty = current <= 0 ? 20 : (15 - current).clamp(5, 50);
+      text += '$index. *${p.productName}*\n';
+      text += '   • Current Stock: $current\n';
+      text += '   • Order Qty: *$suggestQty units*\n';
+      if (p.barcode != null && p.barcode!.isNotEmpty) {
+        text += '   • SKU/Barcode: ${p.barcode}\n';
+      }
+      index++;
+    }
+
+    text +=
+        '\nKindly confirm stock availability, invoice quotation & delivery timeline.\nThank you!';
+
+    final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Widget _buildKpiDivider(bool isDark) {
@@ -930,13 +1249,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       builder: (_) => AddProductDialog(productToEdit: product),
                     );
                   } else if (val == 'label') {
-                    _printerService.printLabel(product);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Printing label for ${product.productName}'),
-                        backgroundColor: AppColors.primary,
-                      ),
-                    );
+                    _showPrintLabelCopiesDialog(product);
                   } else if (val == 'delete') {
                     _confirmDelete(product);
                   }

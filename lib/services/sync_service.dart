@@ -58,11 +58,11 @@ class SyncService {
           }
         }
         if (kDebugMode) {
-          print('[SyncService] Products synced from Firestore. Total: ${box.length}');
+          debugPrint('[SyncService] Products synced from Firestore. Total: ${box.length}');
         }
       },
       onError: (err) {
-        if (kDebugMode) print('[SyncService] Product sync error: $err');
+        if (kDebugMode) debugPrint('[SyncService] Product sync error: $err');
       },
     );
   }
@@ -85,11 +85,11 @@ class SyncService {
           }
         }
         if (kDebugMode) {
-          print('[SyncService] Expenses synced from Firestore. Total: ${box.length}');
+          debugPrint('[SyncService] Expenses synced from Firestore. Total: ${box.length}');
         }
       },
       onError: (err) {
-        if (kDebugMode) print('[SyncService] Expense sync error: $err');
+        if (kDebugMode) debugPrint('[SyncService] Expense sync error: $err');
       },
     );
   }
@@ -110,7 +110,7 @@ class SyncService {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
-      if (kDebugMode) print('[SyncService] Failed to sync product: $e');
+      if (kDebugMode) debugPrint('[SyncService] Failed to sync product: $e');
     }
   }
 
@@ -129,7 +129,7 @@ class SyncService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      if (kDebugMode) print('[SyncService] Failed to update stock online: $e');
+      if (kDebugMode) debugPrint('[SyncService] Failed to update stock online: $e');
     }
   }
 
@@ -139,7 +139,7 @@ class SyncService {
     try {
       await productsCol.doc(productId).delete();
     } catch (e) {
-      if (kDebugMode) print('[SyncService] Failed to delete product online: $e');
+      if (kDebugMode) debugPrint('[SyncService] Failed to delete product online: $e');
     }
   }
 
@@ -152,7 +152,7 @@ class SyncService {
         _uploadProducts(),
       ]);
     } catch (e) {
-      if (kDebugMode) print('[SyncService] uploadUnsyncedData error: $e');
+      if (kDebugMode) debugPrint('[SyncService] uploadUnsyncedData error: $e');
     }
   }
 
@@ -190,7 +190,7 @@ class SyncService {
       await sale.save();
     }
     if (kDebugMode && sales.isNotEmpty) {
-      print('[SyncService] Uploaded ${sales.length} offline sales.');
+      debugPrint('[SyncService] Uploaded ${sales.length} offline sales.');
     }
   }
 
@@ -213,7 +213,7 @@ class SyncService {
       await expense.save();
     }
     if (kDebugMode && expenses.isNotEmpty) {
-      print('[SyncService] Uploaded ${expenses.length} offline expenses.');
+      debugPrint('[SyncService] Uploaded ${expenses.length} offline expenses.');
     }
   }
 
@@ -235,7 +235,7 @@ class SyncService {
       }, SetOptions(merge: true));
     }
     if (kDebugMode && products.isNotEmpty) {
-      print('[SyncService] Synced ${products.length} products to root /products.');
+      debugPrint('[SyncService] Synced ${products.length} products to root /products.');
     }
   }
 
@@ -354,7 +354,7 @@ class SyncService {
         return data;
       }
     } catch (e) {
-      if (kDebugMode) print('[SyncService] fetchCompanyProfile error: $e');
+      if (kDebugMode) debugPrint('[SyncService] fetchCompanyProfile error: $e');
     }
     return null;
   }
@@ -393,7 +393,7 @@ class SyncService {
       await HiveService.saveShopSettings(updated);
       return true;
     } catch (e) {
-      if (kDebugMode) print('[SyncService] saveCompanyProfile error: $e');
+      if (kDebugMode) debugPrint('[SyncService] saveCompanyProfile error: $e');
       return false;
     }
   }
@@ -406,7 +406,7 @@ class SyncService {
         return doc.data() as Map<String, dynamic>;
       }
     } catch (e) {
-      if (kDebugMode) print('[SyncService] fetchAppSettings error: $e');
+      if (kDebugMode) debugPrint('[SyncService] fetchAppSettings error: $e');
     }
     return null;
   }
@@ -417,7 +417,7 @@ class SyncService {
       await settingsCol.doc('app').set(data, SetOptions(merge: true));
       return true;
     } catch (e) {
-      if (kDebugMode) print('[SyncService] saveAppSettings error: $e');
+      if (kDebugMode) debugPrint('[SyncService] saveAppSettings error: $e');
       return false;
     }
   }
@@ -430,7 +430,7 @@ class SyncService {
         return doc.data() as Map<String, dynamic>;
       }
     } catch (e) {
-      if (kDebugMode) print('[SyncService] fetchUserProfile error: $e');
+      if (kDebugMode) debugPrint('[SyncService] fetchUserProfile error: $e');
     }
     return null;
   }
@@ -441,7 +441,7 @@ class SyncService {
       await usersCol.doc(uid).set(data, SetOptions(merge: true));
       return true;
     } catch (e) {
-      if (kDebugMode) print('[SyncService] saveUserProfile error: $e');
+      if (kDebugMode) debugPrint('[SyncService] saveUserProfile error: $e');
       return false;
     }
   }
@@ -485,7 +485,7 @@ class SyncService {
         'timestamp': DateTime.now(),
       };
     } catch (e) {
-      if (kDebugMode) print('[SyncService] performFullSync error: $e');
+      if (kDebugMode) debugPrint('[SyncService] performFullSync error: $e');
       return {
         'success': false,
         'error': e.toString(),

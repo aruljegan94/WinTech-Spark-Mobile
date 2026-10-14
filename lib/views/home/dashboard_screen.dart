@@ -25,6 +25,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final NumberFormat _fmt = NumberFormat('#,##,##0', 'en_IN');
   final DateFormat _dateFmt = DateFormat('EEEE, dd MMM yyyy');
+  bool _hideConfidentialNumbers = false;
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +140,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       }
                     }
 
+                    // ── 5. Owner BI: COGS, Profit & Taxes Aggregation ─────────
+                    final productCostMap = <String, double>{};
+                    for (final doc in prodDocs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final buyPrice = (data['purchasePrice'] ?? data['buyingPrice'] ?? 0).toDouble();
+                      productCostMap[doc.id] = buyPrice;
+                      if (data['productName'] != null) {
+                        productCostMap[data['productName'].toString().toLowerCase().trim()] = buyPrice;
+                      }
+                    }
+
+                    double totalCogs = 0;
+                    double totalOutputGst = 0;
+
+                    for (final doc in salesDocs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      totalOutputGst += (data['gstAmount'] ?? 0).toDouble();
+
+                      final items = (data['items'] as List?) ?? [];
+                      for (final it in items) {
+                        final pId = (it['productId'] ?? '').toString();
+                        final pName = (it['productName'] ?? '').toString().toLowerCase().trim();
+                        final qty = (it['quantity'] ?? 1) as num;
+                        final cost = productCostMap[pId] ?? productCostMap[pName] ?? (((it['price'] ?? 0) as num).toDouble() * 0.7);
+                        totalCogs += (cost * qty).toDouble();
+                      }
+                    }
+
+                    double totalInputGst = 0;
+                    for (final doc in purDocs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      totalInputGst += (data['gstAmount'] ?? data['taxAmount'] ?? ((data['totalAmount'] ?? 0) * 0.18 / 1.18)).toDouble();
+                    }
+
+                    final grossProfit = (totalBilled - totalCogs).clamp(-9999999.0, 9999999.0);
+                    final grossMarginPct = totalBilled > 0 ? (grossProfit / totalBilled * 100) : 0.0;
+                    final netProfit = grossProfit - totalExpenses;
+                    final netMarginPct = totalBilled > 0 ? (netProfit / totalBilled * 100) : 0.0;
+                    final netGstPayable = (totalOutputGst - totalInputGst).clamp(0.0, 9999999.0);
+
                     // ── 5. Recent 5 Invoices ─────────────────────────────────
                     final recentInvoices = salesDocs.take(5).toList();
                     final isDark =
@@ -199,6 +240,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       lowStockCount: lowStockCount,
                                       totalExpenses: totalExpenses,
                                       netMargin: netMargin,
+                                    ),
+
+                                    const SizedBox(height: 16),
+
+                                    // ── Owner Business Intelligence & P&L ────
+                                    _buildOwnerBusinessIntelligenceCard(
+                                      grossSales: totalBilled,
+                                      cogs: totalCogs,
+                                      grossProfit: grossProfit,
+                                      grossMarginPct: grossMarginPct,
+                                      expenses: totalExpenses,
+                                      netProfit: netProfit,
+                                      netMarginPct: netMarginPct,
+                                      outputGst: totalOutputGst,
+                                      inputGst: totalInputGst,
+                                      netGstPayable: netGstPayable,
                                     ),
 
                                     const SizedBox(height: 20),
@@ -713,6 +770,541 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  // ── Owner Business Intelligence & P&L ──────────────────────────────────────
+  Widget _buildOwnerBusinessIntelligenceCard({
+    required double grossSales,
+    required double cogs,
+    required double grossProfit,
+    required double grossMarginPct,
+    required double expenses,
+    required double netProfit,
+    required double netMarginPct,
+    required double outputGst,
+    required double inputGst,
+    required double netGstPayable,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    String pVal(double v) =>
+        _hideConfidentialNumbers ? '₹ ••••••' : '₹${_fmt.format(v)}';
+
+    final grossColor = grossProfit >= 0
+        ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
+        : (isDark ? const Color(0xFFF87171) : Colors.redAccent);
+
+    final netColor = netProfit >= 0
+        ? (isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5))
+        : (isDark ? const Color(0xFFF87171) : Colors.redAccent);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131A29) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.35)
+                : Colors.indigo.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row with Title, Confidential Badge & Privacy Eye Toggle
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF6366F1).withValues(alpha: 0.20)
+                      : const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.insights_rounded,
+                  size: 18,
+                  color: Color(0xFF6366F1),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'OWNER TOOLS & P&L',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1,
+                            color: isDark
+                                ? AppColors.darkText100
+                                : AppColors.lightText100,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFFF59E0B).withValues(alpha: 0.20)
+                                : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'CONFIDENTIAL',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? const Color(0xFFFBBF24)
+                                  : const Color(0xFFB45309),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Real-time margins, COGS & GST balance',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? AppColors.darkText50
+                            : AppColors.lightText50,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Counter Privacy Toggle
+              Tooltip(
+                message: _hideConfidentialNumbers
+                    ? 'Show Numbers'
+                    : 'Counter Privacy (Hide Numbers)',
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _hideConfidentialNumbers = !_hideConfidentialNumbers;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? (_hideConfidentialNumbers
+                              ? const Color(0xFF334155)
+                              : const Color(0xFF1E293B))
+                          : (_hideConfidentialNumbers
+                              ? Colors.grey.shade200
+                              : const Color(0xFFF1F5F9)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _hideConfidentialNumbers
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
+                          size: 15,
+                          color: _hideConfidentialNumbers
+                              ? Colors.amber
+                              : (isDark ? Colors.white70 : Colors.black87),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _hideConfidentialNumbers ? 'Hidden' : 'Hide',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white70 : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // 2 Grand KPI Boxes: Gross Profit & Net Profit
+          Row(
+            children: [
+              // Gross Profit
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'GROSS PROFIT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? AppColors.darkText50
+                                  : AppColors.lightText50,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: grossColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${grossMarginPct.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: grossColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        pVal(grossProfit),
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: grossColor,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Sales minus COGS',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark
+                              ? AppColors.darkText50
+                              : AppColors.lightText50,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Net Profit
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF0F172A)
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'NET PROFIT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: isDark
+                                  ? AppColors.darkText50
+                                  : AppColors.lightText50,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: netColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${netMarginPct.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: netColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        pVal(netProfit),
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: netColor,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'After expenses',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark
+                              ? AppColors.darkText50
+                              : AppColors.lightText50,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // P&L Cascade Details Row: Sales -> COGS -> OPEX
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF1E293B).withValues(alpha: 0.40)
+                  : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Sales',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkText50
+                              : AppColors.lightText50,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        pVal(grossSales),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppColors.darkText100 : AppColors.lightText100,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  '−',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkText50 : AppColors.lightText50,
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'COGS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? AppColors.darkText50
+                                : AppColors.lightText50,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          pVal(cogs),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.amber.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Text(
+                  '−',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkText50 : AppColors.lightText50,
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Expenses',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? AppColors.darkText50
+                                : AppColors.lightText50,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          pVal(expenses),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFF43F5E),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // GST & Tax Position Strip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF0F172A)
+                  : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.receipt_long_rounded,
+                  size: 16,
+                  color: Color(0xFF0EA5E9),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'GST ESTIMATE (Output − ITC)',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                          color: isDark
+                              ? AppColors.darkText50
+                              : AppColors.lightText50,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        'Out: ${pVal(outputGst)}  |  In (ITC): ${pVal(inputGst)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppColors.darkText50
+                              : AppColors.lightText50,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'NET TAX DUE',
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0EA5E9),
+                        ),
+                      ),
+                      Text(
+                        pVal(netGstPayable),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0EA5E9),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

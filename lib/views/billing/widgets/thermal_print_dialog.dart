@@ -77,12 +77,13 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
     final List items = (widget.invoice['items'] as List?) ?? [];
     final double subtotal = (widget.invoice['subtotal'] ?? 0).toDouble();
     final double gstAmount = (widget.invoice['gstAmount'] ?? 0).toDouble();
+    final double discount = (widget.invoice['discount'] ?? 0).toDouble();
     final double total = (widget.invoice['total'] ?? 0).toDouble();
     final double paidAmount = (widget.invoice['paidAmount'] ??
             widget.invoice['amountPaid'] ??
             0)
         .toDouble();
-    final double balance = (total - paidAmount).clamp(0.0, total);
+    final double balance = (total - paidAmount - discount).clamp(0.0, total);
     final status = (widget.invoice['paymentStatus'] ??
             widget.invoice['status'] ??
             'Paid')
@@ -413,6 +414,8 @@ class _ThermalPrintDialogState extends State<ThermalPrintDialog> {
                           // Totals
                           _previewRow('Subtotal:', 'Rs. ${_fmt.format(subtotal)}'),
                           _previewRow('GST:', 'Rs. ${_fmt.format(gstAmount)}'),
+                          if (discount > 0)
+                            _previewRow('Discount:', '-Rs. ${_fmt.format(discount)}'),
                           Container(
                             decoration: const BoxDecoration(
                               border: Border(

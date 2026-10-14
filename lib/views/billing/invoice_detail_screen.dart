@@ -90,7 +90,7 @@ class InvoiceDetailScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.25),
+                    color: AppColors.primary.withValues(alpha: 0.25),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -116,7 +116,7 @@ class InvoiceDetailScreen extends StatelessWidget {
                           Text(
                             shopLocation,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                               fontSize: 12,
                             ),
                           ),
@@ -128,10 +128,10 @@ class InvoiceDetailScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: Colors.white.withOpacity(0.4), width: 1),
+                          color: Colors.white.withValues(alpha: 0.4), width: 1),
                     ),
                     child: const Text(
                       'INVOICE',
@@ -180,10 +180,10 @@ class InvoiceDetailScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
+                          color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                           border:
-                              Border.all(color: statusColor.withOpacity(0.3)),
+                              Border.all(color: statusColor.withValues(alpha: 0.3)),
                         ),
                         child: Text(
                           status,
@@ -377,6 +377,31 @@ class InvoiceDetailScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
+            if (balance > 0.01) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () =>
+                      InvoiceService.sendPaymentReminderViaWhatsApp(invoice),
+                  icon: const Icon(Icons.notifications_active_rounded,
+                      color: Colors.white, size: 18),
+                  label: Text(
+                    'Send Payment Reminder (₹${fmt.format(balance)})',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(

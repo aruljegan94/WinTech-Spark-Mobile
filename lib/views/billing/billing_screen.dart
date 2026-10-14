@@ -394,6 +394,9 @@ class _BillingScreenState extends State<BillingScreen> {
       case 'whatsapp':
         InvoiceService.shareInvoiceViaWhatsApp(data);
         break;
+      case 'remind':
+        InvoiceService.sendPaymentReminderViaWhatsApp(data);
+        break;
       case 'thermal':
         ThermalPrintDialog.show(context, invoice: data);
         break;
@@ -609,14 +612,15 @@ class _BillingScreenState extends State<BillingScreen> {
                 child: ElevatedButton(
                   onPressed: () async {
                     final paid = double.tryParse(ctrl.text.trim()) ?? 0;
+                    final messenger = ScaffoldMessenger.of(context);
+                    final navigator = Navigator.of(ctx);
                     await InvoiceService.updatePayment(
                       data['_docId'],
                       paid,
                       selectedStatus,
                     );
-                    if (!mounted) return;
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    navigator.pop();
+                    messenger.showSnackBar(
                       const SnackBar(
                         content: Text('Payment updated & synced!'),
                         backgroundColor: Colors.green,
@@ -680,10 +684,11 @@ class _BillingScreenState extends State<BillingScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(ctx);
               await InvoiceService.deleteInvoice(data['_docId']);
-              if (!mounted) return;
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
+              navigator.pop();
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text('Invoice deleted'),
                   backgroundColor: Colors.redAccent,
@@ -1049,13 +1054,20 @@ class _ModernInvoiceCard extends StatelessWidget {
                             Icons.chat_bubble_rounded,
                             isDark: isDark,
                           ),
-                          if (status != 'Paid')
+                          if (status != 'Paid') ...[
+                            _menuItem(
+                              'remind',
+                              'WhatsApp Reminder',
+                              Icons.notifications_active_rounded,
+                              isDark: isDark,
+                            ),
                             _menuItem(
                               'pay',
                               'Record Payment',
                               Icons.payments_rounded,
                               isDark: isDark,
                             ),
+                          ],
                           _menuItem(
                             'edit',
                             'Edit Bill',

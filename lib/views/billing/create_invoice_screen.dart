@@ -171,6 +171,133 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     });
   }
 
+  void _addQuickServiceItem(String name, double price, {double gst = 18.0}) {
+    setState(() {
+      final existingIndex = _cartItems.indexWhere(
+          (item) => item.productName.toLowerCase() == name.toLowerCase());
+      if (existingIndex >= 0) {
+        final existing = _cartItems[existingIndex];
+        final newQty = existing.quantity + 1;
+        _cartItems[existingIndex] = SaleItem(
+          productId: existing.productId,
+          productName: existing.productName,
+          quantity: newQty,
+          price: existing.price,
+          gstPercentage: existing.gstPercentage,
+          total: existing.price * newQty * (1 + existing.gstPercentage / 100),
+        );
+      } else {
+        _cartItems.add(SaleItem(
+          productId: 'srv_${const Uuid().v4().substring(0, 8)}',
+          productName: name,
+          quantity: 1,
+          price: price,
+          gstPercentage: gst,
+          total: price * (1 + gst / 100),
+        ));
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.flash_on_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text('Added $name (₹${price.toStringAsFixed(0)}) to bill'),
+          ],
+        ),
+        duration: const Duration(milliseconds: 1400),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF059669),
+      ),
+    );
+  }
+
+  void _showCustomLaborDialog() {
+    final nameCtrl = TextEditingController(text: 'Labour Charge');
+    final amountCtrl = TextEditingController();
+    final gstCtrl = TextEditingController(text: '18');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.construction_rounded, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('Quick Labor Charge',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              autofocus: false,
+              decoration: const InputDecoration(
+                labelText: 'Service / Labor Description',
+                hintText: 'e.g. Wiring repair, Fitting charge',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: amountCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount (₹)',
+                      prefixText: '₹ ',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: gstCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'GST%',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(amountCtrl.text) ?? 0;
+              final name = nameCtrl.text.trim();
+              final gst = double.tryParse(gstCtrl.text) ?? 18;
+              if (amount > 0 && name.isNotEmpty) {
+                Navigator.pop(ctx);
+                _addQuickServiceItem(name, amount, gst: gst);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Add to Bill'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveInvoice({
     bool openWhatsApp = false,
     bool printImmediately = false,
@@ -360,7 +487,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   children: [
                     // ── Customer Details Section ─────────────────────────────
                     _buildCustomerSection(),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
+
+                    // ── Quick-Service Speed Grid (No-Barcode Items & Labor) ──
+                    _buildQuickServiceSpeedGrid(isDark),
+                    const SizedBox(height: 16),
 
                     // ── Add Item Section ─────────────────────────────────────
                     _buildAddItemSection(),
@@ -477,6 +608,232 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ── Quick-Service Speed Grid (No-Barcode Items & Labor Charges) ─────────────
+  Widget _buildQuickServiceSpeedGrid(bool isDark) {
+    final services = [
+      {
+        'title': 'Oil Change',
+        'price': 150.0,
+        'icon': Icons.opacity_rounded,
+        'color': const Color(0xFFF59E0B),
+      },
+      {
+        'title': 'General Service',
+        'price': 450.0,
+        'icon': Icons.build_rounded,
+        'color': const Color(0xFF3B82F6),
+      },
+      {
+        'title': 'Fitting / Labor',
+        'price': 200.0,
+        'icon': Icons.handyman_rounded,
+        'color': const Color(0xFF10B981),
+      },
+      {
+        'title': 'Wheel Balancing',
+        'price': 300.0,
+        'icon': Icons.adjust_rounded,
+        'color': const Color(0xFF06B6D4),
+      },
+      {
+        'title': 'Foam Wash',
+        'price': 250.0,
+        'icon': Icons.local_car_wash_rounded,
+        'color': const Color(0xFF8B5CF6),
+      },
+      {
+        'title': 'Brake Overhaul',
+        'price': 200.0,
+        'icon': Icons.motion_photos_paused_rounded,
+        'color': const Color(0xFFEF4444),
+      },
+      {
+        'title': 'Puncture Repair',
+        'price': 50.0,
+        'icon': Icons.tire_repair_rounded,
+        'color': const Color(0xFFEC4899),
+      },
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? AppColors.darkBorder
+              : AppColors.primary.withValues(alpha: 0.12),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.flash_on_rounded,
+                        color: Color(0xFFF59E0B), size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'QUICK SERVICE & LABOR',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                      color: isDark
+                          ? AppColors.darkText100
+                          : AppColors.lightText100,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.primaryLight.withValues(alpha: 0.15)
+                      : AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '1-Tap Add',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isDark
+                        ? AppColors.primaryLight
+                        : AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ...services.map((s) {
+                final color = s['color'] as Color;
+                final price = s['price'] as double;
+                final title = s['title'] as String;
+                final icon = s['icon'] as IconData;
+
+                return InkWell(
+                  onTap: () => _addQuickServiceItem(title, price),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? color.withValues(alpha: 0.12)
+                          : color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: color.withValues(alpha: isDark ? 0.35 : 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, size: 14, color: color),
+                        const SizedBox(width: 6),
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? AppColors.darkText100
+                                : AppColors.lightText100,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '₹${price.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              // Custom Labor button
+              InkWell(
+                onTap: _showCustomLaborDialog,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.darkSurfaceElevated
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add_circle_outline_rounded,
+                          size: 14, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        '+ Custom Labor',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppColors.primaryLight
+                              : AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
